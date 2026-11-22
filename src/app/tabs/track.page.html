@@ -1,0 +1,19 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>{{'Track' | translate}}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title size="large">{{'Track' | translate}}</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <div class="empty-state">
+    <ion-icon name="infinite"></ion-icon>
+    <h2>{{'No track yet' | translate}}</h2>
+    <p>{{'Soon you will build your track here from the parts you own.' | translate}}</p>
+  </div>
+</ion-content>

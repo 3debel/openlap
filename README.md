@@ -1,3 +1,8 @@
+> **Hinweis:** Dieses Repository ist ein veränderter Fork von [Open Lap](https://github.com/tkem/openlap)
+> (© Thomas Kemmer, Apache License 2.0). Erweiterungen: Tab-Navigation im iOS-Stil
+> (Garage, Strecke, Rennen, Statistik), geplanter Streckenplaner mit Teilebestand.
+> Nicht verbunden mit Carrera Toys GmbH oder dem ursprünglichen Autor.
+
 # Open Lap [![CI build status](https://img.shields.io/github/actions/workflow/status/tkem/openlap/ci.yml)](https://github.com/tkem/openlap/actions/workflows/ci.yml)
 
 Open Lap is a simple, no-nonsense slot car race management app for

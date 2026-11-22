@@ -1,0 +1,7 @@
+// Auf Smartphones im Querformat (Rennanzeige im Vollbild) wird die
+// Tab-Leiste ausgeblendet, damit die Rangliste den ganzen Platz bekommt.
+@media (orientation: landscape) and (max-height: 500px) {
+  ion-tab-bar {
+    display: none;
+  }
+}

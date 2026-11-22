@@ -1,0 +1,44 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>{{'Garage' | translate}}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title size="large">{{'Garage' | translate}}</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <div class="section-label">{{'Track' | translate}}</div>
+  <ion-list [inset]="true">
+    <ion-item [detail]="false">
+      <ion-icon name="grid" slot="start" color="primary"></ion-icon>
+      <ion-label>{{'Track parts' | translate}}</ion-label>
+      <ion-note slot="end">{{'Coming soon' | translate}}</ion-note>
+    </ion-item>
+  </ion-list>
+
+  <div class="section-label">{{'Racing' | translate}}</div>
+  <ion-list [inset]="true">
+    <ion-item button [detail]="true" routerLink="drivers">
+      <ion-icon name="people" slot="start" color="primary"></ion-icon>
+      <ion-label>{{'Drivers' | translate}}</ion-label>
+    </ion-item>
+    <ion-item button [detail]="true" routerLink="tuning" [disabled]="!(cu | async)">
+      <ion-icon name="speedometer" slot="start" color="primary"></ion-icon>
+      <ion-label>
+        {{'Tuning' | translate}}
+        <p *ngIf="!(cu | async)">{{'Requires a connected Control Unit' | translate}}</p>
+      </ion-label>
+    </ion-item>
+  </ion-list>
+
+  <ion-list [inset]="true">
+    <ion-item button [detail]="true" routerLink="/settings">
+      <ion-icon name="settings" slot="start" color="medium"></ion-icon>
+      <ion-label>{{'Settings' | translate}}</ion-label>
+    </ion-item>
+  </ion-list>
+</ion-content>

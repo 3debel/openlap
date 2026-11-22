@@ -30,6 +30,7 @@ import { DriversModule } from './drivers';
 import { MenuModule } from './menu';
 import { RmsModule } from './rms';
 import { SharedModule } from './shared';
+import { TabsModule } from './tabs';
 import { TuningModule } from './tuning';
 
 import { LoggingService } from './services';
@@ -61,13 +62,14 @@ export function swRegistrationOptions(platform: Platform) {
   bootstrap: [AppComponent], 
   imports: [
     BrowserModule,
-    IonicModule.forRoot(),
+    IonicModule.forRoot({ mode: 'ios' }),
     IonicStorageModule.forRoot(/* TODO: config */),
     BackendModule,
     DriversModule,
     MenuModule,
     RmsModule,
     SharedModule,
+    TabsModule,
     TuningModule,
     AppRoutingModule,
     ServiceWorkerModule.register('ngsw-worker.js')

@@ -89,7 +89,7 @@ export class MenuComponent implements OnChanges {
   }
 
   startPractice() {
-    return this.nav.navigateRoot('rms/practice');
+    return this.nav.navigateRoot('tabs/race/practice');
   }
 
   startQualifying() {
@@ -101,7 +101,7 @@ export class MenuComponent implements OnChanges {
         modal.onDidDismiss().then(detail => {
           if (detail.data) {
             this.settings.setQualifyingSettings(detail.data).then(() => {
-              this.nav.navigateRoot('rms/qualifying');
+              this.nav.navigateRoot('tabs/race/qualifying');
             });
           }
         });
@@ -119,7 +119,7 @@ export class MenuComponent implements OnChanges {
         modal.onDidDismiss().then(detail => {
           if (detail.data) {
             this.settings.setRaceSettings(detail.data).then(() => {
-              this.nav.navigateRoot('rms/race');
+              this.nav.navigateRoot('tabs/race/race');
             });
           }
         });

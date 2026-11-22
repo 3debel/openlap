@@ -1,4 +1,15 @@
 {
+  "Garage": "Garage",
+  "Track": "Track",
+  "Statistics": "Statistics",
+  "Track parts": "Track parts",
+  "Coming soon": "Coming soon",
+  "Racing": "Racing",
+  "Requires a connected Control Unit": "Requires a connected Control Unit",
+  "No track yet": "No track yet",
+  "Soon you will build your track here from the parts you own.": "Soon you will build your track here from the parts you own.",
+  "No statistics yet": "No statistics yet",
+  "Best laps and records per track will appear here.": "Best laps and records per track will appear here.",
   "Welcome to Open Lap!":
     "Welcome to Open Lap!",
   "Please select a Control Unit device from the menu.":

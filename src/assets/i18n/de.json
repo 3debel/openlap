@@ -1,4 +1,15 @@
 {
+  "Garage": "Garage",
+  "Track": "Strecke",
+  "Statistics": "Statistik",
+  "Track parts": "Streckenteile",
+  "Coming soon": "Demnächst",
+  "Racing": "Rennbetrieb",
+  "Requires a connected Control Unit": "Erfordert eine verbundene Control Unit",
+  "No track yet": "Noch keine Strecke",
+  "Soon you will build your track here from the parts you own.": "Hier stellen Sie bald Ihre Strecke aus den Teilen zusammen, die Sie besitzen.",
+  "No statistics yet": "Noch keine Statistik",
+  "Best laps and records per track will appear here.": "Hier erscheinen Bestzeiten und Rekorde je Strecke.",
   "Welcome to Open Lap!":
     "Willkommen bei Open Lap!",
   "Please select a Control Unit device from the menu.":
