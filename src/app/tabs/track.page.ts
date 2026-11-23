@@ -6,7 +6,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { Subscription, firstValueFrom } from 'rxjs';
 
 import {
-  AutoTrackOptions, DEFAULT_OPTIONS, Difficulty, EditorService, FeedSource, FeedSpacing, Inventory, InventoryService,
+  AutoTrackOptions, DEFAULT_OPTIONS, Difficulty, EditorService, FeedSource, JointCondition, Inventory, InventoryService,
   Layout, LayoutsService, Levels, PARTS, PowerPlan, SavedLayout, buildPartsList, generateLayouts, partName, planPower
 } from '../track';
 
@@ -105,8 +105,12 @@ export class TrackPage implements OnDestroy {
     this.persist();
   }
 
-  setFeedSpacing(value: FeedSpacing) {
-    this.options.feedSpacing = value;
+  volts(v: number) {
+    return v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  setJointCondition(value: JointCondition) {
+    this.options.joints = value;
     this.refreshPower();
     this.persist();
   }
@@ -146,7 +150,7 @@ export class TrackPage implements OnDestroy {
       this.warnings = result.warnings;
       this.suggestions = result.layouts.map(layout => ({
         layout,
-        power: planPower(layout.pieces, this.options.feedSource, this.options.feedSpacing),
+        power: planPower(layout.pieces, this.options.feedSource, this.options.joints),
         missing: this.missingParts(layout),
         saved: false,
       }));
@@ -194,7 +198,7 @@ export class TrackPage implements OnDestroy {
 
   private refreshPower() {
     for (const s of this.suggestions) {
-      s.power = planPower(s.layout.pieces, this.options.feedSource, this.options.feedSpacing);
+      s.power = planPower(s.layout.pieces, this.options.feedSource, this.options.joints);
     }
   }
 

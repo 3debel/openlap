@@ -111,10 +111,10 @@
       </div>
     </ion-item>
     <ion-item>
-      <ion-label><h3>{{'Feed every' | translate}}</h3></ion-label>
-      <ion-segment slot="end" class="small" [value]="'' + options.feedSpacing" (ionChange)="setFeedSpacing($any(+$event.detail.value))">
-        <ion-segment-button value="5000"><ion-label>5 m</ion-label></ion-segment-button>
-        <ion-segment-button value="2500"><ion-label>2,5 m</ion-label></ion-segment-button>
+      <ion-label><h3>{{'Track connections' | translate}}</h3><p class="wrap">{{'joints_hint_' + options.joints | translate}}</p></ion-label>
+      <ion-segment slot="end" class="small" [value]="options.joints" (ionChange)="setJointCondition($any($event.detail.value))">
+        <ion-segment-button value="new"><ion-label>{{'New' | translate}}</ion-label></ion-segment-button>
+        <ion-segment-button value="used"><ion-label>{{'Used' | translate}}</ion-label></ion-segment-button>
       </ion-segment>
     </ion-item>
   </ion-list>
@@ -157,7 +157,9 @@
         <span class="badge" [class]="'badge ' + s.layout.difficulty">{{difficultyKey(s.layout.difficulty) | translate}}</span>
         <span *ngIf="s.layout.crossings">{{ 'n_bridges' | translate: { n: s.layout.crossings } }}</span>
         <span *ngIf="s.layout.supports">{{ 'n_supports' | translate: { n: s.layout.supports } }}</span>
-        <span>{{ 'n_feeds' | translate: { n: s.power.points.length } }}</span>
+        <span *ngIf="s.power.points.length">{{ 'n_feeds' | translate: { n: s.power.points.length } }}</span>
+        <span *ngIf="!s.power.points.length">{{ (s.power.need === 'optional' ? 'Feed optional' : 'No feed needed') | translate }}</span>
+        <span>{{ 'drop_short' | translate: { v: volts(s.power.dropWithout) } }}</span>
         <span *ngIf="s.layout.chargingStations">{{ 'n_chargers' | translate: { n: s.layout.chargingStations } }}</span>
       </div>
       <div class="missing" *ngIf="s.missing.length">

@@ -5,7 +5,7 @@ import { map } from 'rxjs/operators';
 
 import { SettingsService } from '../services/settings.service';
 import { Difficulty, Layout, Levels } from './generator';
-import { FeedSource, FeedSpacing } from './power';
+import { FeedSource, JointCondition } from './power';
 
 export interface AutoTrackOptions {
   widthCm: number;
@@ -19,7 +19,7 @@ export interface AutoTrackOptions {
   /** Stromquelle der Zusatzeinspeisung */
   feedSource: FeedSource;
   /** Abstand der Einspeisungen in mm */
-  feedSpacing: FeedSpacing;
+  joints: JointCondition;
 }
 
 export const DEFAULT_OPTIONS: AutoTrackOptions = {
@@ -31,7 +31,7 @@ export const DEFAULT_OPTIONS: AutoTrackOptions = {
   ownPartsOnly: true,
   chargingStations: 0,
   feedSource: 'internal',
-  feedSpacing: 5000,
+  joints: 'new',
 };
 
 export interface SavedLayout {
@@ -47,6 +47,13 @@ export interface SavedLayout {
 const LAYOUTS = 'layouts';
 const OPTIONS = 'autotrack-options';
 
+/** Frühere Einstellwerte (z. B. fester Einspeiseabstand) auf gültige Werte bringen. */
+function fixOptions(o: AutoTrackOptions): AutoTrackOptions {
+  if (o.joints !== 'new' && o.joints !== 'used') o.joints = 'new';
+  delete (o as { feedSpacing?: number }).feedSpacing;
+  return o;
+}
+
 /** Ältere Einträge (ohne Name/Beschreibung) ergänzen. */
 function migrate(l: Partial<SavedLayout>, i: number): SavedLayout {
   return {
@@ -55,7 +62,7 @@ function migrate(l: Partial<SavedLayout>, i: number): SavedLayout {
     description: l.description ?? '',
     created: l.created ?? Date.now(),
     updated: l.updated ?? l.created ?? Date.now(),
-    options: { ...DEFAULT_OPTIONS, ...(l.options ?? {}) },
+    options: fixOptions({ ...DEFAULT_OPTIONS, ...(l.options ?? {}) }),
     layout: { chargingStations: 0, accessories: [], ...(l.layout as Layout) },
   };
 }
@@ -74,7 +81,7 @@ export class LayoutsService {
   constructor(private settings: SettingsService) {
     this.layouts = settings.observe(LAYOUTS).pipe(map(v => ((v as Partial<SavedLayout>[]) ?? []).map(migrate)));
     this.layouts.subscribe(list => this.current = list);
-    this.options = settings.observe(OPTIONS).pipe(map(v => ({ ...DEFAULT_OPTIONS, ...(v ?? {}) })));
+    this.options = settings.observe(OPTIONS).pipe(map(v => fixOptions({ ...DEFAULT_OPTIONS, ...(v ?? {}) })));
   }
 
   get(id: string): SavedLayout | undefined {

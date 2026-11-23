@@ -11,3 +11,4 @@ export * from './editor.page';
 export * from './editor.service';
 export * from './parts-list';
 export * from './power';
+export * from './control-unit.component';

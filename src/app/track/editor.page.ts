@@ -12,7 +12,7 @@ import { Draft, EditorService } from './editor.service';
 import { InventoryService } from './inventory.service';
 import { LayoutsService } from './layouts.service';
 import { PartsList, buildPartsList } from './parts-list';
-import { FeedPoint, FeedSource, FeedSpacing, PowerPlan, planPower } from './power';
+import { FeedPoint, FeedSource, JointCondition, PowerPlan, planPower } from './power';
 
 type PickerMode = 'replace' | 'insert-after' | 'insert-before';
 
@@ -177,9 +177,13 @@ export class EditorPage implements OnDestroy {
     this.refresh();
   }
 
-  setFeedSpacing(v: FeedSpacing) {
+  volts(v: number) {
+    return v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  setJointCondition(v: JointCondition) {
     if (!this.draft) return;
-    this.draft.options.feedSpacing = v;
+    this.draft.options.joints = v;
     this.dirty = true;
     this.refresh();
   }
@@ -282,7 +286,7 @@ export class EditorPage implements OnDestroy {
     const e = evaluateMoves(d.moves, d.start, w, h, d.options.chargingStations);
     this.evaluation = e;
     this.layout = layoutFromEvaluation(e, w, h, d.options.chargingStations);
-    this.power = e.closed ? planPower(e.pieces, d.options.feedSource, d.options.feedSpacing) : null;
+    this.power = e.closed ? planPower(e.pieces, d.options.feedSource, d.options.joints) : null;
     this.partsList = buildPartsList(this.layout, this.power, this.inventory, this.lang);
     this.problems = [...new Set(e.conflicts.filter(c => c.kind === 'overlap' && c.a >= 0).flatMap(c => [c.a, c.b]))];
   }

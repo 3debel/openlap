@@ -22,6 +22,7 @@ interface Box {
   lx: number;
   ly: number;
   kind: AccessoryBox['kind'];
+  transform: string;
 }
 
 const PART_BY_ID = new Map(PARTS.map(p => [p.id, p]));
@@ -49,10 +50,17 @@ function levelColor(h: number): string {
     <svg *ngIf="layout" [attr.viewBox]="viewBox" preserveAspectRatio="xMidYMid meet" role="img"
          [attr.aria-label]="label" [class.selectable]="selectable">
       <rect class="area" [attr.x]="0" [attr.y]="0" [attr.width]="layout.areaWidth" [attr.height]="layout.areaDepth" rx="40"></rect>
-      <g *ngFor="let b of boxes" class="box" [class.cu]="b.kind === 'controlunit'">
-        <polygon [attr.points]="b.points"></polygon>
-        <text [attr.x]="b.lx" [attr.y]="b.ly" text-anchor="middle" dominant-baseline="central">{{b.label}}</text>
-      </g>
+      <ng-container *ngFor="let b of boxes">
+        <g *ngIf="b.kind === 'controlunit'; else plainBox" class="cu" [attr.transform]="b.transform">
+          <g cu-symbol></g>
+        </g>
+        <ng-template #plainBox>
+          <g class="box">
+            <polygon [attr.points]="b.points"></polygon>
+            <text [attr.x]="b.lx" [attr.y]="b.ly" text-anchor="middle" dominant-baseline="central">{{b.label}}</text>
+          </g>
+        </ng-template>
+      </ng-container>
       <g *ngFor="let s of shapes" (click)="tap(s.index)" [class.sel]="s.selected" [class.problem]="s.problem">
         <path class="body" [attr.d]="s.body" [attr.fill]="s.fill"></path>
         <path *ngFor="let l of s.lanes" class="lane" [attr.d]="l"></path>
@@ -129,7 +137,8 @@ function boxOf(b: AccessoryBox, label: string): Box {
   const ux = Math.cos(t), uy = Math.sin(t), nx = -Math.sin(t), ny = Math.cos(t);
   const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, c]) =>
     `${(b.x + ux * a * b.along / 2 + nx * c * b.across / 2).toFixed(1)},${(b.y + uy * a * b.along / 2 + ny * c * b.across / 2).toFixed(1)}`);
-  return { points: pts.join(' '), label, lx: b.x, ly: b.y, kind: b.kind };
+  const transform = `translate(${b.x.toFixed(1)},${b.y.toFixed(1)}) rotate(${b.heading}) scale(1,${b.side ?? 1}) translate(${-b.along / 2},${-b.across / 2})`;
+  return { points: pts.join(' '), label, lx: b.x, ly: b.y, kind: b.kind, transform };
 }
 
 function shapeOf(p: PlacedPiece, index: number, selected: boolean, problem: boolean): Shape {

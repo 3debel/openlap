@@ -51,6 +51,8 @@ export interface AccessoryBox {
   heading: number;
   /** Index des Bahnteils, an dem das Zubehör angeschlossen ist */
   piece: number;
+  /** Seite der Fahrbahn (+1 rechts, -1 links in Fahrtrichtung) */
+  side?: 1 | -1;
 }
 
 export interface PlacedPiece {
@@ -102,41 +104,54 @@ const SAMPLE_STEP = 30;
 const NEIGHBOR_ALONG = 400;
 
 export const DIFFICULTY_BANDS: Record<Difficulty, [number, number]> = {
-  easy: [0, 0.3],
-  medium: [0.3, 0.55],
-  hard: [0.55, 1],
+  easy: [0, 0.2],
+  medium: [0.2, 0.5],
+  hard: [0.5, 1],
 };
 
+/**
+ * Profile der Schwierigkeit. Maßgeblich ist nicht die Enge der Kurven (Kurve 1
+ * steckt in jeder Grundpackung), sondern was Fahrer fordert:
+ *  - S-Kurven (Richtungswechsel mit kurzer Verbindung)
+ *  - Schikanen (Richtungswechsel ohne Gerade dazwischen)
+ *  - Kurven mit zu- oder abnehmendem Radius („Parabolica“)
+ *  - lange Gerade in eine sich zuziehende Kurve
+ *  - Vielfalt der Radien
+ * Oval und Acht gelten als Einsteiger-Strecken.
+ */
 interface Profile {
-  straightProb: number;
   straightRun: [number, number];
   radiusWeight: Record<number, number>;
   bankedPref: number;
-  sameDir: number;
+  /** Wahrscheinlichkeit einer Gegenkurve (S-Kurve) */
+  reversal: number;
+  /** Wahrscheinlichkeit, eine Schikane einzubauen */
+  chicane: number;
+  /** Wahrscheinlichkeit, dass eine Kurve den Radius wechselt */
+  parabolic: number;
+  /** Wahrscheinlichkeit: lange Gerade vor sich zuziehender Kurve */
+  longIntoTight: number;
   corners: number[];
-  hairpin: number;
-  longStraightIntoTight: number;
-  radiusChange: number;
 }
 
 const PROFILES: Record<Difficulty, Profile> = {
   easy: {
-    straightProb: 0.65, straightRun: [1, 4],
-    radiusWeight: { 300: 0.1, 500: 0.45, 700: 0.3, 900: 0.15 },
-    bankedPref: 0.6, sameDir: 0.9, corners: [90, 180, 180, 120],
-    hairpin: 0, longStraightIntoTight: 0, radiusChange: 0,
+    straightRun: [1, 4],
+    radiusWeight: { 300: 0.4, 500: 0.35, 700: 0.15, 900: 0.1 },
+    bankedPref: 0.4, reversal: 0.03, chicane: 0, parabolic: 0, longIntoTight: 0,
+    corners: [90, 180, 180],
   },
   medium: {
-    straightProb: 0.5, straightRun: [1, 3],
+    straightRun: [1, 3],
     radiusWeight: { 300: 0.4, 500: 0.35, 700: 0.18, 900: 0.07 },
-    bankedPref: 0.3, sameDir: 0.65, corners: [60, 90, 120, 180],
-    hairpin: 0.1, longStraightIntoTight: 0.2, radiusChange: 0.15,
+    bankedPref: 0.25, reversal: 0.3, chicane: 0.15, parabolic: 0.25, longIntoTight: 0.2,
+    corners: [60, 90, 120, 180],
   },
   hard: {
-    straightProb: 0.4, straightRun: [0, 3],
-    radiusWeight: { 300: 0.7, 500: 0.22, 700: 0.06, 900: 0.02 },
-    bankedPref: 0.05, sameDir: 0.45, corners: [30, 60, 90, 180],
-    hairpin: 0.35, longStraightIntoTight: 0.45, radiusChange: 0.35,
+    straightRun: [0, 3],
+    radiusWeight: { 300: 0.45, 500: 0.3, 700: 0.15, 900: 0.1 },
+    bankedPref: 0.05, reversal: 0.5, chicane: 0.5, parabolic: 0.6, longIntoTight: 0.5,
+    corners: [30, 60, 90, 120, 180],
   },
 };
 
@@ -162,8 +177,12 @@ export const ADAPTER = '20030360';
 /** Teile, die immer verfügbar angenommen werden (fehlen sie im Bestand, erscheinen sie als „fehlend“) */
 const ASSUMED = [CONNECTION, ADAPTER];
 
-/** Stellflächen (Näherung): Control Unit und Ladeschale neben der Fahrbahn */
-const CU_SIZE = { along: 230, across: 150 };
+/**
+ * Stellflächen (Näherung): Control Unit und Ladeschale neben der Fahrbahn.
+ * Control Unit: Länge wie die Anschlussschiene (34,5 cm laut Händlerangabe),
+ * Tiefe 15 cm geschätzt – bitte nachmessen.
+ */
+export const CU_SIZE = { along: 345, across: 150 };
 const CHARGER_SIZE = { along: 110, across: 140 };
 const ACCESSORY_GAP = 50;
 
@@ -301,6 +320,8 @@ interface HeightResult {
   /** Höhe an jeder Teilgrenze (Index i = Anfang von Teil i) */
   joints: number[];
   maxHeight: number;
+  /** Anzahl Brücken (zusammenhängende erhöhte Abschnitte über einer Kreuzung) */
+  bridges: number;
 }
 
 function cyclicDist(a: number, b: number, total: number) {
@@ -315,10 +336,15 @@ function cyclicDist(a: number, b: number, total: number) {
  */
 function solveHeights(crossings: Crossing[], offsets: number[], total: number, banked: boolean[], levels: Levels): HeightResult | null {
   if (crossings.length === 0) {
-    return { joints: offsets.map(() => 0), maxHeight: 0 };
+    return { joints: offsets.map(() => 0), maxHeight: 0, bridges: 0 };
   }
-  // Drei Ebenen nur mit echter Zwischenebene (2 über 1), nicht als hohe Brücke über 0
-  const pairs: [number, number][] = levels === 3 ? [[1, 0], [2, 1]] : [[1, 0]];
+  // Immer die niedrigste mögliche Lösung: zuerst 2 Ebenen; 3 Ebenen nur, wenn 2 nicht reichen
+  const two = solveHeightsWith(crossings, offsets, total, banked, [[1, 0]]);
+  if (two || levels < 3) return two;
+  return solveHeightsWith(crossings, offsets, total, banked, [[1, 0], [2, 1], [2, 0]]);
+}
+
+function solveHeightsWith(crossings: Crossing[], offsets: number[], total: number, banked: boolean[], pairs: [number, number][]): HeightResult | null {
   const options: { over: number; under: number; hOver: number; hUnder: number }[][] = crossings.map(c => {
     const list = [];
     for (const [hOver, hUnder] of pairs) {
@@ -354,12 +380,25 @@ function solveHeights(crossings: Crossing[], offsets: number[], total: number, b
       if (Math.abs(joints[i] - hm) > 0.02 || Math.abs(h(s1 % total) - hm) > 0.02) return;
     }
     const maxHeight = Math.max(...joints, ...choice.map(c => c.hOver));
-    const wanted = levels - 1;
-    // bevorzugt: gewünschte Ebenenzahl erreicht, dann möglichst wenig Höhe (Stützen)
-    const cost = (maxHeight >= wanted ? 0 : 1000) + joints.reduce((a, b) => a + b, 0);
+    // möglichst wenig Höhe (Stützen)
+    const cost = maxHeight * 1000 + joints.reduce((a, b) => a + b, 0);
     if (cost < bestCost) {
       bestCost = cost;
-      best = { joints, maxHeight };
+      // Brücken: obenliegende Kreuzungspunkte, die nicht auf demselben erhöhten Abschnitt liegen
+      const overs = [...new Set(choice.map(c => c.over))].sort((a, b) => a - b);
+      let bridges = 0;
+      for (let i = 0; i < overs.length; i++) {
+        const prev = overs[(i - 1 + overs.length) % overs.length];
+        let connected = overs.length > 1 && i > 0;
+        if (connected) {
+          // dazwischen durchgehend erhöht?
+          for (let x = prev; x <= overs[i]; x += 50) {
+            if (h(x) < 0.99) { connected = false; break; }
+          }
+        }
+        if (!connected) bridges++;
+      }
+      best = { joints, maxHeight, bridges };
     }
   };
 
@@ -379,9 +418,25 @@ function solveHeights(crossings: Crossing[], offsets: number[], total: number, b
 
 // ---------------------------------------------------------------- Schwierigkeit
 
-export function scoreDifficulty(pieces: { partId: string; dir: Dir }[], crossings: number): number {
-  type Run = { kind: 'straight'; length: number } | { kind: 'curve'; dir: Dir; angle: number; radii: number[]; tightFirst: boolean; banked: number };
+export interface DifficultyFeatures {
+  /** Richtungswechsel mit kurzer Verbindung (< 2 Standardgeraden); eine S-Kurve zählt doppelt */
+  esses: number;
+  /** Richtungswechsel ohne nennenswerte Gerade (≤ 1/3 Gerade) */
+  chicanes: number;
+  /** Kurven mit wechselndem Radius */
+  parabolic: number;
+  /** lange Gerade (≥ 3 Standardgeraden) in eine sich zuziehende Kurve */
+  longIntoTight: number;
+  /** Anzahl verschiedener Radien (ohne Steilkurven) */
+  radii: number;
+  bankedShare: number;
+}
+
+export function difficultyFeatures(pieces: { partId: string; dir: Dir }[]): DifficultyFeatures {
+  type Run = { kind: 'straight'; length: number } | { kind: 'curve'; dir: Dir; angle: number; radii: number[] };
   const runs: Run[] = [];
+  let total = 0, banked = 0;
+  const radiusSet = new Set<number>();
   for (const pc of pieces) {
     const part = PART_BY_ID.get(pc.partId)!;
     const g = part.geometry;
@@ -390,17 +445,17 @@ export function scoreDifficulty(pieces: { partId: string; dir: Dir }[], crossing
       if (last && last.kind === 'straight') last.length += g.length;
       else runs.push({ kind: 'straight', length: g.length });
     } else if (g.kind === 'curve') {
+      total += g.angle;
+      if (isBanked(part)) banked += g.angle;
+      else radiusSet.add(g.radius);
       if (last && last.kind === 'curve' && last.dir === pc.dir) {
         last.angle += g.angle;
         if (last.radii[last.radii.length - 1] !== g.radius) last.radii.push(g.radius);
-        if (isBanked(part)) last.banked += g.angle;
       } else {
-        runs.push({ kind: 'curve', dir: pc.dir, angle: g.angle, radii: [g.radius],
-          tightFirst: g.radius <= 300 && !isBanked(part), banked: isBanked(part) ? g.angle : 0 });
+        runs.push({ kind: 'curve', dir: pc.dir, angle: g.angle, radii: [g.radius] });
       }
     }
   }
-  // Rundkurs: letzte und erste Gruppe gleicher Art zusammenfassen
   if (runs.length > 1) {
     const a = runs[0], b = runs[runs.length - 1];
     if (a.kind === 'straight' && b.kind === 'straight') {
@@ -408,39 +463,46 @@ export function scoreDifficulty(pieces: { partId: string; dir: Dir }[], crossing
       runs.pop();
     }
   }
-
-  let total = 0, tight = 0, banked = 0, chicanes = 0, braking = 0, radiusChanges = 0, hairpins = 0;
-  for (const pc of pieces) {
-    const part = PART_BY_ID.get(pc.partId)!;
-    if (!isCurve(part)) continue;
-    const g = part.geometry as { radius: number; angle: number };
-    total += g.angle;
-    if (g.radius <= 300) tight += isBanked(part) ? g.angle * 0.5 : g.angle;
-    if (isBanked(part)) banked += g.angle;
-  }
-  for (let i = 0; i < runs.length; i++) {
+  const f: DifficultyFeatures = { esses: 0, chicanes: 0, parabolic: 0, longIntoTight: 0, radii: radiusSet.size, bankedShare: total ? banked / total : 0 };
+  const n = runs.length;
+  for (let i = 0; i < n; i++) {
     const r = runs[i];
-    const next = runs[(i + 1) % runs.length];
-    const after = runs[(i + 2) % runs.length];
-    if (r.kind === 'curve') {
-      radiusChanges += r.radii.length - 1;
-      if (r.angle >= 180 && Math.min(...r.radii) <= 300) hairpins++;
-      if (next.kind === 'curve' && next.dir !== r.dir) chicanes++;
-      if (next.kind === 'straight' && next.length <= 235 && after.kind === 'curve' && after.dir !== r.dir) chicanes++;
-    } else if (r.length >= 690 && next.kind === 'curve' && next.tightFirst) {
-      braking++;
+    if (r.kind !== 'curve') continue;
+    if (r.radii.length > 1) f.parabolic++;
+    // nächste Kurvengruppe und die Gerade dazwischen
+    let gap = 0, j = (i + 1) % n;
+    while (runs[j].kind === 'straight' && j !== i) {
+      gap += (runs[j] as { length: number }).length;
+      j = (j + 1) % n;
+    }
+    const next = runs[j];
+    if (next.kind === 'curve' && next.dir !== r.dir) {
+      if (gap < 690) f.esses++;
+      if (gap <= 116) f.chicanes++;
+    }
+    // lange Gerade davor und Kurve zieht sich zu
+    const prev = runs[(i - 1 + n) % n];
+    if (prev.kind === 'straight' && prev.length >= 1035 && r.radii.length > 1 && r.radii[r.radii.length - 1] < r.radii[0]) {
+      f.longIntoTight++;
     }
   }
-  const tightShare = total ? tight / total : 0;
-  const bankedShare = total ? banked / total : 0;
+  return f;
+}
+
+/**
+ * Schwierigkeit 0–1. Oval und Acht liegen bei ~0, Strecken mit mehreren
+ * S-Kurven im mittleren Bereich, Schikanen und Kurven mit wechselndem Radius
+ * machen eine Strecke schwer.
+ */
+export function scoreDifficulty(pieces: { partId: string; dir: Dir }[], _crossings = 0): number {
+  const f = difficultyFeatures(pieces);
   const score =
-    0.4 * tightShare +
-    0.2 * Math.min(1, chicanes / 2) +
-    0.15 * Math.min(1, braking / 2) +
-    0.1 * Math.min(1, radiusChanges / 2) +
-    0.1 * Math.min(1, hairpins) +
-    0.05 * Math.min(1, crossings) -
-    0.15 * bankedShare;
+    0.3 * Math.min(1, f.esses / 4) +
+    0.25 * Math.min(1, f.parabolic / 2) +
+    0.2 * Math.min(1, f.chicanes / 2) +
+    0.1 * Math.min(1, f.longIntoTight) +
+    0.15 * Math.max(0, Math.min(1, (f.radii - 1) / 2)) -
+    0.1 * f.bankedShare;
   return Math.max(0, Math.min(1, score));
 }
 
@@ -467,6 +529,10 @@ interface Context {
 interface Corner {
   dir: Dir;
   pieces: string[];
+  /** keine Gerade davor (Schikane) */
+  tight?: boolean;
+  /** lange Gerade davor (Bremszone) */
+  longBefore?: boolean;
 }
 
 function avail(opts: GeneratorOptions, id: string) {
@@ -517,38 +583,80 @@ function buildCorners(ctx: Context, used: Record<string, number>, target: number
   let turned = 0;
   let lastDir: Dir = startDir;
   const radii = Object.keys(profile.radiusWeight).map(Number);
+  const has = (r: number) => ctx.curves.some(c => radiusOf(c) === r && (used[c.id] ?? 0) < avail(opts, c.id));
+  const pickRadius = (exclude: number[] = []) => pickWeighted(rand, radii, r =>
+    exclude.includes(r) || !has(r) ? 0 : profile.radiusWeight[r]);
+
+  /** Kurventeile für `angle` Grad auf den Radien `seq` (nacheinander) zusammenstellen. */
+  const take = (seq: number[], angle: number): string[] | null => {
+    const pieces: string[] = [];
+    let a = 0;
+    seq.forEach((r, idx) => {
+      const share = idx === seq.length - 1 ? angle - a : Math.round(angle / seq.length / 15) * 15;
+      let part = 0;
+      const types = ctx.curves.filter(c => radiusOf(c) === r);
+      const preferBanked = rand() < profile.bankedPref;
+      types.sort((x, y) => Number(isBanked(y) === preferBanked) - Number(isBanked(x) === preferBanked));
+      for (const t of types) {
+        const step = (t.geometry as { angle: number }).angle;
+        while (part + step <= share && (used[t.id] ?? 0) < avail(opts, t.id)) {
+          pieces.push(t.id);
+          used[t.id] = (used[t.id] ?? 0) + 1;
+          part += step;
+        }
+      }
+      a += part;
+    });
+    return a > 0 ? pieces : null;
+  };
+  const angleOf = (pieces: string[]) => pieces.reduce((s, id) => s + (PART_BY_ID.get(id)!.geometry as { angle: number }).angle, 0);
+
   for (let guard = 0; guard < 40; guard++) {
     const remaining = target - turned;
     if (remaining === 0 && corners.length >= 3) return corners;
     const need: Dir = remaining > 0 ? 1 : remaining < 0 ? -1 : (lastDir === 1 ? -1 : 1);
-    // Gegenkurve (S-Kurve/Schikane) nur, wenn noch genug Drehung übrig ist
+
+    // Schikane: zwei kurze Gegenkurven ohne Gerade dazwischen (Netto-Drehung 0)
+    if (rand() < profile.chicane && corners.length > 0) {
+      const r = pickRadius();
+      if (r !== undefined) {
+        const a = rand() < 0.5 ? 30 : 60;
+        const d: Dir = rand() < 0.5 ? 1 : -1;
+        const p1 = take([r], a);
+        const p2 = p1 ? take([r], angleOf(p1)) : null;
+        if (p1 && p2 && angleOf(p1) === angleOf(p2)) {
+          corners.push({ dir: d, pieces: p1, tight: rand() < 0.5 });
+          corners.push({ dir: (d === 1 ? -1 : 1) as Dir, pieces: p2, tight: true });
+          continue;
+        }
+      }
+    }
+
+    // S-Kurve: Gegenkurve, nur wenn noch genug Drehung übrig ist
     let dir: Dir = need;
-    if (Math.abs(remaining) >= 90 && rand() > profile.sameDir) dir = need === 1 ? -1 : 1;
-    const radius = pickWeighted(rand, radii, r => profile.radiusWeight[r] *
-      (ctx.curves.some(c => radiusOf(c) === r && (used[c.id] ?? 0) < avail(opts, c.id)) ? 1 : 0));
+    if (Math.abs(remaining) >= 90 && rand() < profile.reversal) dir = need === 1 ? -1 : 1;
+
+    const radius = pickRadius();
     if (radius === undefined) return null;
-    const types = ctx.curves.filter(c => radiusOf(c) === radius);
-    const preferBanked = rand() < profile.bankedPref;
-    types.sort((a, b) => Number(isBanked(b) === preferBanked) - Number(isBanked(a) === preferBanked));
-    let angle = radius <= 300 && rand() < profile.hairpin ? 180
-      : profile.corners[Math.floor(rand() * profile.corners.length)];
+    let angle = profile.corners[Math.floor(rand() * profile.corners.length)];
     if (dir === need && remaining !== 0) angle = Math.min(angle, Math.abs(remaining));
     if (dir !== need) angle = Math.min(angle, 60);
 
-    const pieces: string[] = [];
-    let a = 0;
-    for (const t of types) {
-      const step = (t.geometry as { angle: number }).angle;
-      while (a + step <= angle && (used[t.id] ?? 0) < avail(opts, t.id)) {
-        pieces.push(t.id);
-        used[t.id] = (used[t.id] ?? 0) + 1;
-        a += step;
+    // Kurve mit wechselndem Radius (weit → eng oder eng → weit)
+    let seq = [radius];
+    let longBefore = false;
+    if (angle >= 60 && rand() < profile.parabolic) {
+      const second = pickRadius([radius]);
+      if (second !== undefined) {
+        const tightening = rand() < 0.6;
+        seq = tightening ? [Math.max(radius, second), Math.min(radius, second)] : [Math.min(radius, second), Math.max(radius, second)];
+        longBefore = tightening && rand() < profile.longIntoTight;
       }
-      if (a >= angle) break;
     }
-    if (a === 0) continue;
-    corners.push({ dir, pieces });
-    turned += dir * a;
+    const pieces = take(seq, angle);
+    if (!pieces) continue;
+    corners.push({ dir, pieces, longBefore });
+    turned += dir * angleOf(pieces);
     lastDir = dir;
   }
   return null;
@@ -599,9 +707,10 @@ function attempt(ctx: Context, seen: Set<string>): Layout | null {
   // Grundlängen der Geraden (in Einheiten) nach Profil
   const units: number[] = corners.map((c, i) => {
     const prev = corners[(i - 1 + k) % k];
-    if (prev.dir !== c.dir && rand() < 0.5) return 0;            // S-Kurve ohne Gerade
+    if (c.tight) return 0;                                         // Schikane: direkt aneinander
+    if (prev.dir !== c.dir && rand() < profile.reversal) return rand() < 0.5 ? 0 : 12; // S-Kurve
     let [lo, hi] = profile.straightRun;
-    if (rand() < profile.longStraightIntoTight) { lo = Math.max(lo, 3); hi = Math.max(hi, 5); }
+    if (c.longBefore) { lo = Math.max(lo, 3); hi = Math.max(hi, 5); }
     const n = lo + Math.floor(rand() * (hi - lo + 1));
     const extra = rand() < 0.25 ? (rand() < 0.5 ? 3 : 4) : 0;
     return n * 12 + extra;
@@ -616,7 +725,7 @@ function attempt(ctx: Context, seen: Set<string>): Layout | null {
   const total345 = avail(opts, STANDARD) + 1 + adapterUnitsFor(opts.chargingStations ?? 0) +
     LANE_CHANGE_IDS.reduce((s, id) => s + avail(opts, id), 0);
 
-  for (const [i, j] of pairs.slice(0, 40)) {
+  for (const [i, j] of pairs.filter(([a, b]) => !corners[a].tight && !corners[b].tight).slice(0, 40)) {
     const hi = (runHeading[i] * Math.PI) / 180, hj = (runHeading[j] * Math.PI) / 180;
     const ui = { x: Math.cos(hi), y: Math.sin(hi) }, uj = { x: Math.cos(hj), y: Math.sin(hj) };
     const det = ui.x * uj.y - ui.y * uj.x;
@@ -768,7 +877,7 @@ function finalize(ctx: Context, moves: Move[]): Layout | null {
     areaDepth: opts.areaDepth,
     length: total,
     laneChanges,
-    crossings: analysis.crossings.length,
+    crossings: heights.bridges,
     levelsUsed: Math.round(heights.maxHeight) + 1,
     supports,
     difficultyScore: round2(score),
@@ -823,7 +932,7 @@ export function placeAccessories(pieces: PlacedPiece[], chargingStations: number
       const nx = -Math.sin(t) * side, ny = Math.cos(t) * side;
       const d = TRACK_WIDTH / 2 + ACCESSORY_GAP + w.across / 2;
       const mx = p.start.x + ux * (p.length / 2 + w.shift), my = p.start.y + uy * (p.length / 2 + w.shift);
-      const box: AccessoryBox = { kind: w.kind, x: mx + nx * d, y: my + ny * d, along: w.along, across: w.across, heading: p.start.heading, piece: w.piece };
+      const box: AccessoryBox = { kind: w.kind, x: mx + nx * d, y: my + ny * d, along: w.along, across: w.across, heading: p.start.heading, piece: w.piece, side };
       // Ecken in der Grundfläche?
       for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
         const ex = box.x + ux * a * w.along / 2 + nx * b * w.across / 2;
@@ -878,7 +987,7 @@ function rank(l: Layout, opts: GeneratorOptions, maxLen: number) {
   const target = (lo + hi) / 2;
   const inBand = l.difficultyScore >= lo && l.difficultyScore < hi + (opts.difficulty === 'hard' ? 1 : 0);
   return (inBand ? 3 : 0) +
-    (l.levelsUsed >= opts.levels ? 2 : 0) -
+    5 * Math.min(l.levelsUsed - 1, opts.levels - 1) -
     Math.abs(l.difficultyScore - target) +
     0.8 * (l.length / maxLen);
 }
@@ -919,7 +1028,10 @@ export async function generateLayouts(opts: GeneratorOptions, onProgress?: (f: n
     await new Promise(r => setTimeout(r, 0));
   }
 
-  const layouts = [...found.values()]
+  let all = [...found.values()];
+  // Mehrere Ebenen gewünscht: Strecken ohne Brücke nur zeigen, wenn es keine mit Brücke gibt
+  if (opts.levels > 1 && all.some(l => l.levelsUsed > 1)) all = all.filter(l => l.levelsUsed > 1);
+  const layouts = all
     .sort((a, b) => rank(b, opts, ctx.maxLength) - rank(a, opts, ctx.maxLength))
     .slice(0, maxResults);
   if (layouts.length && !layouts.some(l => l.difficulty === opts.difficulty)) warnings.push('difficulty-not-reached');
@@ -1013,7 +1125,7 @@ export function evaluateMoves(moves: Move[], start: Pose, areaW: number, areaD: 
   const box = outerBox(seq.flatMap(s => s.samples));
   const outside = box.minX < 0 || box.minY < 0 || box.maxX > areaW || box.maxY > areaD;
 
-  let levelsUsed = 1, supports = 0;
+  let levelsUsed = 1, supports = 0, bridges = crossPts.length;
   if (closed && !conflicts.some(c => c.kind === 'overlap') && crossPts.length) {
     const banked = moves.map(m => isBanked(PART_BY_ID.get(m.partId)!));
     const heights = solveHeights(crossPts, seq.map(s => s.offset), total, banked, 3);
@@ -1024,6 +1136,7 @@ export function evaluateMoves(moves: Move[], start: Pose, areaW: number, areaD: 
       });
       levelsUsed = Math.round(heights.maxHeight) + 1;
       supports = heights.joints.filter(h => h > 0.05).length;
+      bridges = heights.bridges;
     } else {
       conflicts.push({ a: -1, b: -1, kind: 'overlap' });
     }
@@ -1038,7 +1151,7 @@ export function evaluateMoves(moves: Move[], start: Pose, areaW: number, areaD: 
     closed,
     outside,
     conflicts,
-    crossings: crossPts.length,
+    crossings: bridges,
     levelsUsed,
     supports,
     length: total,
