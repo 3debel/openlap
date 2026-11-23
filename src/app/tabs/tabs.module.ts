@@ -1,11 +1,12 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
 import { IonicModule } from '@ionic/angular';
 import { TranslateModule } from '@ngx-translate/core';
 
-import { PartIconComponent, PartsPage, SeriesPage } from '../track';
+import { LayoutViewComponent, PartIconComponent, PartsPage, SeriesPage } from '../track';
 
 import { GaragePage } from './garage.page';
 import { StatsPage } from './stats.page';
@@ -15,6 +16,7 @@ import { TrackPage } from './track.page';
 @NgModule({
   declarations: [
     GaragePage,
+    LayoutViewComponent,
     PartIconComponent,
     PartsPage,
     SeriesPage,
@@ -24,6 +26,7 @@ import { TrackPage } from './track.page';
   ],
   imports: [
     CommonModule,
+    FormsModule,
     IonicModule,
     RouterModule,
     TranslateModule

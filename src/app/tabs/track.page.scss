@@ -1,0 +1,236 @@
+@use '../track/shared';
+
+ion-label h3 {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+// Grundfläche: zwei Zahlenfelder (16 px gegen Zoom auf dem iPhone)
+.area {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ion-color-medium);
+
+  input {
+    width: 64px;
+    height: 36px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: #2c2c2e;
+    color: var(--ion-text-color);
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .unit {
+    font-size: 15px;
+  }
+}
+
+ion-segment.small {
+  width: 132px;
+
+  ion-segment-button {
+    min-width: 0;
+  }
+}
+
+.difficulty {
+  --min-height: 36px;
+}
+
+.full {
+  width: 100%;
+  padding: 0 0 12px;
+
+  .hint {
+    margin: 8px 2px 0;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--ion-color-medium);
+  }
+}
+
+.toggle-label {
+  font-size: 16px;
+}
+
+// Stepper wie in der Teileliste
+.stepper {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  border-radius: 8px;
+  background: #2c2c2e;
+}
+
+.step {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ion-text-color);
+  font-size: 18px;
+  transition: background-color 100ms cubic-bezier(0.23, 1, 0.32, 1);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -6px 0;
+  }
+
+  &:active:not(:disabled) {
+    background: #48484a;
+  }
+
+  &:disabled {
+    color: #48484a;
+  }
+}
+
+.count {
+  min-width: 28px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  margin: 8px 16px 16px;
+
+  ion-button {
+    --border-radius: 12px;
+    height: 50px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  ion-spinner {
+    width: 18px;
+    height: 18px;
+    margin-inline-end: 8px;
+  }
+}
+
+.notice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 16px 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #1c1c1e;
+  color: var(--ion-color-medium);
+  font-size: 14px;
+  line-height: 1.4;
+
+  ion-icon {
+    flex-shrink: 0;
+    font-size: 18px;
+    color: var(--ion-color-warning);
+  }
+}
+
+.card {
+  margin: 0 16px 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #1c1c1e;
+
+  layout-view {
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  ion-button {
+    margin: 4px 0 0;
+  }
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 12px 0 8px;
+  text-align: center;
+
+  strong {
+    display: block;
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  span {
+    font-size: 12px;
+    color: var(--ion-color-medium);
+  }
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ion-color-medium);
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+
+  &.easy { background: rgba(48, 209, 88, 0.2); color: #30d158; }
+  &.medium { background: rgba(255, 214, 10, 0.2); color: #ffd60a; }
+  &.hard { background: rgba(255, 69, 58, 0.2); color: #ff453a; }
+}
+
+.missing {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(84, 84, 88, 0.65);
+
+  h4 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--ion-color-medium);
+  }
+}
+
+.missing-row {
+  display: flex;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14px;
+
+  .n {
+    min-width: 32px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .art {
+    margin-inline-start: auto;
+    color: var(--ion-color-medium);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.thumb {
+  width: 72px;
+  margin-inline-end: 12px;
+}

@@ -11,9 +11,145 @@
     </ion-toolbar>
   </ion-header>
 
-  <div class="empty-state">
-    <ion-icon name="infinite"></ion-icon>
-    <h2>{{'No track yet' | translate}}</h2>
-    <p>{{'Soon you will build your track here from the parts you own.' | translate}}</p>
+  <!-- ===== Optionen ===== -->
+  <div class="section-label">{{'Create automatically' | translate}}</div>
+  <ion-list [inset]="true">
+    <ion-item>
+      <ion-label>
+        <h3>{{'Floor area' | translate}}</h3>
+        <p>{{'Width × depth of your table or floor' | translate}}</p>
+      </ion-label>
+      <div slot="end" class="area">
+        <input type="number" inputmode="decimal" min="80" max="2000" [(ngModel)]="options.widthCm" (change)="persist()"
+               [attr.aria-label]="'Width in cm' | translate">
+        <span>×</span>
+        <input type="number" inputmode="decimal" min="60" max="2000" [(ngModel)]="options.depthCm" (change)="persist()"
+               [attr.aria-label]="'Depth in cm' | translate">
+        <span class="unit">cm</span>
+      </div>
+    </ion-item>
+
+    <ion-item>
+      <ion-label>
+        <h3>{{'Levels' | translate}}</h3>
+        <p>{{'levels_hint_' + options.levels | translate}}</p>
+      </ion-label>
+      <ion-segment slot="end" class="small" [value]="'' + options.levels" (ionChange)="setLevels($any(+$event.detail.value))">
+        <ion-segment-button *ngFor="let l of levelChoices" [value]="'' + l">
+          <ion-label>{{l}}</ion-label>
+        </ion-segment-button>
+      </ion-segment>
+    </ion-item>
+
+    <ion-item>
+      <ion-label>
+        <h3>{{'Lane changes (min.)' | translate}}</h3>
+        <p *ngIf="availableLaneChanges > 0 && options.ownPartsOnly">{{ 'lane_changes_available' | translate: { n: availableLaneChanges } }}</p>
+        <p *ngIf="availableLaneChanges === 0">{{'Lane changes need Digital 132 switches' | translate}}</p>
+      </ion-label>
+      <div slot="end" class="stepper">
+        <button type="button" class="step" (click)="changeLaneChanges(-1)" [disabled]="options.minLaneChanges === 0"
+                [attr.aria-label]="'Fewer' | translate"><ion-icon name="remove"></ion-icon></button>
+        <span class="count">{{options.minLaneChanges}}</span>
+        <button type="button" class="step" (click)="changeLaneChanges(1)" [disabled]="options.minLaneChanges >= availableLaneChanges"
+                [attr.aria-label]="'More' | translate"><ion-icon name="add"></ion-icon></button>
+      </div>
+    </ion-item>
+
+    <ion-item lines="none" class="difficulty">
+      <ion-label>
+        <h3>{{'Difficulty' | translate}}</h3>
+      </ion-label>
+    </ion-item>
+    <ion-item>
+      <div class="full">
+        <ion-segment [value]="options.difficulty" (ionChange)="setDifficulty($any($event.detail.value))">
+          <ion-segment-button *ngFor="let d of difficulties" [value]="d">
+            <ion-label>{{difficultyKey(d) | translate}}</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+        <p class="hint">{{'difficulty_hint_' + options.difficulty | translate}}</p>
+      </div>
+    </ion-item>
+
+    <ion-item>
+      <ion-toggle [(ngModel)]="options.ownPartsOnly" (ionChange)="persist()">
+        <span class="toggle-label">{{'Only use my parts' | translate}}</span>
+      </ion-toggle>
+    </ion-item>
+  </ion-list>
+  <p class="footnote" *ngIf="!options.ownPartsOnly">{{'Any parts may be used. Missing parts are listed as a shopping list.' | translate}}</p>
+  <p class="footnote" *ngIf="options.ownPartsOnly && ownedPieces === 0">
+    {{'Enter your parts first under Garage → Track parts.' | translate}}
+    <a routerLink="/tabs/garage/parts">{{'Enter parts' | translate}}</a>
+  </p>
+
+  <div class="actions">
+    <ion-button expand="block" (click)="generate()" [disabled]="!canGenerate">
+      <ion-spinner *ngIf="running" name="crescent" slot="start"></ion-spinner>
+      {{(running ? 'Searching tracks …' : (suggestions.length ? 'Create new suggestions' : 'Create tracks')) | translate}}
+    </ion-button>
   </div>
+
+  <!-- ===== Hinweise ===== -->
+  <div class="notice" *ngFor="let w of warnings">
+    <ion-icon name="information-circle-sharp"></ion-icon>
+    <span>{{'warning_' + w | translate}}</span>
+  </div>
+  <div class="notice" *ngIf="searched && !running && suggestions.length === 0 && warnings.length === 0">
+    <ion-icon name="information-circle-sharp"></ion-icon>
+    <span>{{'warning_none_found' | translate}}</span>
+  </div>
+
+  <!-- ===== Vorschläge ===== -->
+  <ng-container *ngIf="suggestions.length">
+    <div class="section-label">{{'Suggestions' | translate}}</div>
+    <div class="card" *ngFor="let s of suggestions; index as i">
+      <layout-view [layout]="s.layout" [label]="('Suggestion' | translate) + ' ' + (i + 1)"></layout-view>
+      <div class="stats">
+        <div><strong>{{meters(s.layout.length)}} m</strong><span>{{'Length' | translate}}</span></div>
+        <div><strong>{{s.layout.pieces.length}}</strong><span>{{'Parts' | translate}}</span></div>
+        <div><strong>{{s.layout.laneChanges}}</strong><span>{{'Lane changes' | translate}}</span></div>
+        <div><strong>{{s.layout.levelsUsed}}</strong><span>{{'Levels' | translate}}</span></div>
+      </div>
+      <div class="meta">
+        <span class="badge" [class]="'badge ' + s.layout.difficulty">{{difficultyKey(s.layout.difficulty) | translate}}</span>
+        <span *ngIf="s.layout.crossings">{{ 'n_bridges' | translate: { n: s.layout.crossings } }}</span>
+        <span *ngIf="s.layout.supports">{{ 'n_supports' | translate: { n: s.layout.supports } }}</span>
+      </div>
+      <div class="missing" *ngIf="s.missing.length">
+        <h4>{{'Missing parts' | translate}}</h4>
+        <div *ngFor="let m of s.missing" class="missing-row">
+          <span class="n">{{m.count}}×</span>
+          <span>{{m.name}}</span>
+          <span class="art" *ngIf="m.articleNo">{{m.articleNo}}</span>
+        </div>
+      </div>
+      <ion-button fill="clear" size="small" (click)="save(s)" [disabled]="s.saved">
+        {{(s.saved ? 'Saved' : 'Save track') | translate}}
+      </ion-button>
+    </div>
+  </ng-container>
+
+  <!-- ===== Gespeicherte Strecken ===== -->
+  <ng-container *ngIf="saved.length">
+    <div class="section-label">{{'Saved tracks' | translate}}</div>
+    <ion-list [inset]="true">
+      <ion-item-sliding *ngFor="let s of saved; trackBy: trackSaved">
+        <ion-item>
+          <layout-view slot="start" class="thumb" [layout]="s.layout"></layout-view>
+          <ion-label>
+            <h3>{{meters(s.layout.length)}} m · {{difficultyKey(s.layout.difficulty) | translate}}</h3>
+            <p>{{s.options.widthCm}} × {{s.options.depthCm}} cm · {{s.layout.pieces.length}} {{'Parts' | translate}} · {{dateLabel(s.created)}}</p>
+          </ion-label>
+        </ion-item>
+        <ion-item-options side="end">
+          <ion-item-option color="danger" (click)="remove(s.id)">{{'Delete' | translate}}</ion-item-option>
+        </ion-item-options>
+      </ion-item-sliding>
+    </ion-list>
+    <p class="footnote">{{'Swipe left to delete a saved track.' | translate}}</p>
+  </ng-container>
+
+  <p class="footnote">{{'Part dimensions are approximate. Check closure with your real track before building.' | translate}}</p>
 </ion-content>
