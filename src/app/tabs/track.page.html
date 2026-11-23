@@ -15,10 +15,7 @@
   <div class="section-label">{{'Create automatically' | translate}}</div>
   <ion-list [inset]="true">
     <ion-item>
-      <ion-label>
-        <h3>{{'Floor area' | translate}}</h3>
-        <p>{{'Width × depth of your table or floor' | translate}}</p>
-      </ion-label>
+      <ion-label>{{'Floor area' | translate}}</ion-label>
       <div slot="end" class="area">
         <input type="number" inputmode="decimal" min="80" max="2000" [(ngModel)]="options.widthCm" (change)="persist()"
                [attr.aria-label]="'Width in cm' | translate">
@@ -30,10 +27,7 @@
     </ion-item>
 
     <ion-item>
-      <ion-label>
-        <h3>{{'Levels' | translate}}</h3>
-        <p>{{'levels_hint_' + options.levels | translate}}</p>
-      </ion-label>
+      <ion-label>{{'Levels' | translate}}</ion-label>
       <ion-segment slot="end" class="small" [value]="'' + options.levels" (ionChange)="setLevels($any(+$event.detail.value))">
         <ion-segment-button *ngFor="let l of levelChoices" [value]="'' + l">
           <ion-label>{{l}}</ion-label>
@@ -42,42 +36,15 @@
     </ion-item>
 
     <ion-item>
-      <ion-label>
-        <h3>{{'Control Unit position' | translate}}</h3>
-        <p class="wrap">{{'cu_edge_hint' | translate}}</p>
-      </ion-label>
-    </ion-item>
-    <ion-item>
-      <div class="full">
-        <ion-segment [value]="options.cuEdge" (ionChange)="setCuEdge($any($event.detail.value))">
-          <ion-segment-button value="front"><ion-label>{{'Front' | translate}}</ion-label></ion-segment-button>
-          <ion-segment-button value="back"><ion-label>{{'Back' | translate}}</ion-label></ion-segment-button>
-          <ion-segment-button value="left"><ion-label>{{'Left' | translate}}</ion-label></ion-segment-button>
-          <ion-segment-button value="right"><ion-label>{{'Right' | translate}}</ion-label></ion-segment-button>
-        </ion-segment>
-      </div>
+      <ion-select [label]="'Difficulty' | translate" interface="popover" [value]="options.difficulty"
+                  (ionChange)="setDifficulty($any($event.detail.value))">
+        <ion-select-option *ngFor="let d of difficulties" [value]="d">{{difficultyKey(d) | translate}}</ion-select-option>
+      </ion-select>
     </ion-item>
 
     <ion-item>
       <ion-label>
-        <h3>{{'Direction of travel' | translate}}</h3>
-        <p class="wrap">{{'direction_hint_' + options.direction | translate}}</p>
-      </ion-label>
-    </ion-item>
-    <ion-item>
-      <div class="full">
-        <ion-segment [value]="options.direction" (ionChange)="setDirection($any($event.detail.value))">
-          <ion-segment-button value="ccw"><ion-label>{{'Anticlockwise' | translate}}</ion-label></ion-segment-button>
-          <ion-segment-button value="cw"><ion-label>{{'Clockwise' | translate}}</ion-label></ion-segment-button>
-          <ion-segment-button value="auto"><ion-label>{{'Auto' | translate}}</ion-label></ion-segment-button>
-        </ion-segment>
-      </div>
-    </ion-item>
-
-    <ion-item>
-      <ion-label>
-        <h3>{{'Lane changes (min.)' | translate}}</h3>
-        <p *ngIf="availableLaneChanges > 0 && options.ownPartsOnly">{{ 'lane_changes_available' | translate: { n: availableLaneChanges } }}</p>
+        {{'Lane changes (min.)' | translate}}
         <p *ngIf="availableLaneChanges === 0">{{'Lane changes need Digital 132 switches' | translate}}</p>
       </ion-label>
       <div slot="end" class="stepper">
@@ -89,34 +56,31 @@
       </div>
     </ion-item>
 
-    <ion-item lines="none" class="difficulty">
-      <ion-label>
-        <h3>{{'Difficulty' | translate}}</h3>
-      </ion-label>
-    </ion-item>
     <ion-item>
-      <div class="full">
-        <ion-segment [value]="options.difficulty" (ionChange)="setDifficulty($any($event.detail.value))">
-          <ion-segment-button *ngFor="let d of difficulties" [value]="d">
-            <ion-label>{{difficultyKey(d) | translate}}</ion-label>
-          </ion-segment-button>
-        </ion-segment>
-        <p class="hint">{{'difficulty_hint_' + options.difficulty | translate}}</p>
-      </div>
+      <ion-select [label]="'Control Unit position' | translate" interface="popover" [value]="options.cuEdge"
+                  (ionChange)="setCuEdge($any($event.detail.value))">
+        <ion-select-option value="front">{{'Front (drivers)' | translate}}</ion-select-option>
+        <ion-select-option value="back">{{'Back' | translate}}</ion-select-option>
+        <ion-select-option value="left">{{'Left' | translate}}</ion-select-option>
+        <ion-select-option value="right">{{'Right' | translate}}</ion-select-option>
+      </ion-select>
     </ion-item>
 
     <ion-item>
-      <ion-label>
-        <h3>{{'Charging cradles' | translate}}</h3>
-        <p>{{'WIRELESS+, 2 per Adapter Unit next to start/finish' | translate}}</p>
-      </ion-label>
-      <div slot="end" class="stepper">
-        <button type="button" class="step" (click)="changeChargers(-1)" [disabled]="!options.chargingStations"
-                [attr.aria-label]="'Fewer' | translate"><ion-icon name="remove"></ion-icon></button>
-        <span class="count">{{options.chargingStations || 0}}</span>
-        <button type="button" class="step" (click)="changeChargers(1)" [disabled]="options.chargingStations >= 6"
-                [attr.aria-label]="'More' | translate"><ion-icon name="add"></ion-icon></button>
-      </div>
+      <ion-select [label]="'Direction of travel' | translate" interface="popover" [value]="options.direction"
+                  (ionChange)="setDirection($any($event.detail.value))">
+        <ion-select-option value="cw">{{'Clockwise' | translate}}</ion-select-option>
+        <ion-select-option value="ccw">{{'Anticlockwise' | translate}}</ion-select-option>
+        <ion-select-option value="auto">{{'Auto' | translate}}</ion-select-option>
+      </ion-select>
+    </ion-item>
+
+    <ion-item>
+      <ion-select [label]="'Additional feed' | translate" interface="popover" [value]="options.feedSource"
+                  (ionChange)="setFeedSource($any($event.detail.value))">
+        <ion-select-option value="internal">{{'Original power supply' | translate}}</ion-select-option>
+        <ion-select-option value="external">{{'Stronger power supply' | translate}}</ion-select-option>
+      </ion-select>
     </ion-item>
 
     <ion-item>
@@ -125,32 +89,8 @@
       </ion-toggle>
     </ion-item>
   </ion-list>
-  <p class="footnote">{{'Start/finish is always the connection track with the Control Unit.' | translate}}</p>
-
-  <div class="section-label">{{'Power supply' | translate}}</div>
-  <ion-list [inset]="true">
-    <ion-item>
-      <ion-label>
-        <h3>{{'Source for additional supply' | translate}}</h3>
-        <p class="wrap">{{('feed_source_hint_' + options.feedSource) | translate: supplyParams}}</p>
-      </ion-label>
-    </ion-item>
-    <ion-item>
-      <div class="full">
-        <ion-segment [value]="options.feedSource" (ionChange)="setFeedSource($any($event.detail.value))">
-          <ion-segment-button value="internal"><ion-label>{{'Internal' | translate}}</ion-label></ion-segment-button>
-          <ion-segment-button value="external"><ion-label>{{'External' | translate}}</ion-label></ion-segment-button>
-        </ion-segment>
-      </div>
-    </ion-item>
-    <ion-item>
-      <ion-label><h3>{{'Track connections' | translate}}</h3><p class="wrap">{{'joints_hint_' + options.joints | translate}}</p></ion-label>
-      <ion-segment slot="end" class="small" [value]="options.joints" (ionChange)="setJointCondition($any($event.detail.value))">
-        <ion-segment-button value="new"><ion-label>{{'New' | translate}}</ion-label></ion-segment-button>
-        <ion-segment-button value="used"><ion-label>{{'Used' | translate}}</ion-label></ion-segment-button>
-      </ion-segment>
-    </ion-item>
-  </ion-list>
+  <p class="footnote">{{'direction_hint_' + options.direction | translate}}</p>
+  <p class="footnote" *ngIf="options.feedSource === 'external'">{{'power_note_external' | translate: supplyParams}}</p>
 
   <p class="footnote" *ngIf="!options.ownPartsOnly">{{'Any parts may be used. Missing parts are listed as a shopping list.' | translate}}</p>
   <p class="footnote" *ngIf="options.ownPartsOnly && ownedPieces === 0">

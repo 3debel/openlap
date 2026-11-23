@@ -1,4 +1,10 @@
 {
+  "Front (drivers)": "Vorne (Fahrerseite)",
+  "Additional feed": "Zusatzeinspeisung",
+  "Original power supply": "Original-Netzteil",
+  "Stronger power supply": "Stärkeres Netzteil",
+  "series_indicator_hint": "Ein Haken zeigt, dass Sie Teile dieser Serie eingetragen haben. Alle Evolution-Schienen passen auch auf Digital 132 – gemeinsame Teile erscheinen in beiden Listen und werden nur einmal gezählt.",
+  "Parts entered": "Teile eingetragen",
   "Control Unit position": "Standort der Control Unit",
   "Front": "Vorne",
   "Back": "Hinten",

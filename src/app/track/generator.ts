@@ -126,8 +126,8 @@ const SAMPLE_STEP = 30;
 const NEIGHBOR_ALONG = 400;
 
 export const DIFFICULTY_BANDS: Record<Difficulty, [number, number]> = {
-  easy: [0, 0.2],
-  medium: [0.2, 0.5],
+  easy: [0, 0.25],
+  medium: [0.25, 0.5],
   hard: [0.5, 1],
 };
 
@@ -154,6 +154,10 @@ interface Profile {
   /** Wahrscheinlichkeit: lange Gerade vor sich zuziehender Kurve */
   longIntoTight: number;
   corners: number[];
+  /** größter Winkel einer Gegenkurve */
+  reversalMax: number;
+  /** Winkel der Schikanen-Kurven */
+  chicaneAngles: number[];
 }
 
 const PROFILES: Record<Difficulty, Profile> = {
@@ -161,19 +165,19 @@ const PROFILES: Record<Difficulty, Profile> = {
     straightRun: [1, 4],
     radiusWeight: { 300: 0.4, 500: 0.35, 700: 0.15, 900: 0.1 },
     bankedPref: 0.4, reversal: 0.03, chicane: 0, parabolic: 0, longIntoTight: 0,
-    corners: [90, 180, 180],
+    corners: [90, 180, 180], reversalMax: 30, chicaneAngles: [30],
   },
   medium: {
     straightRun: [1, 3],
-    radiusWeight: { 300: 0.4, 500: 0.35, 700: 0.18, 900: 0.07 },
-    bankedPref: 0.25, reversal: 0.3, chicane: 0.15, parabolic: 0.25, longIntoTight: 0.2,
-    corners: [60, 90, 120, 180],
+    radiusWeight: { 300: 0.45, 500: 0.35, 700: 0.15, 900: 0.05 },
+    bankedPref: 0.2, reversal: 0.35, chicane: 0.2, parabolic: 0.25, longIntoTight: 0.2,
+    corners: [60, 90, 120, 180], reversalMax: 60, chicaneAngles: [30, 60],
   },
   hard: {
-    straightRun: [0, 3],
-    radiusWeight: { 300: 0.45, 500: 0.3, 700: 0.15, 900: 0.1 },
-    bankedPref: 0.05, reversal: 0.5, chicane: 0.5, parabolic: 0.6, longIntoTight: 0.5,
-    corners: [30, 60, 90, 120, 180],
+    straightRun: [0, 2],
+    radiusWeight: { 300: 0.65, 500: 0.3, 700: 0.05, 900: 0 },
+    bankedPref: 0, reversal: 0.7, chicane: 0.55, parabolic: 0.5, longIntoTight: 0.5,
+    corners: [60, 90, 120, 180], reversalMax: 180, chicaneAngles: [60, 90],
   },
 };
 
@@ -443,40 +447,51 @@ function solveHeightsWith(crossings: Crossing[], offsets: number[], total: numbe
 // ---------------------------------------------------------------- Schwierigkeit
 
 export interface DifficultyFeatures {
-  /** Richtungswechsel mit kurzer Verbindung (< 2 Standardgeraden); eine S-Kurve zählt doppelt */
+  /** S-Kurven, gewichtet nach Winkel und Enge beider Kurven (Verbindung < 2 Standardgeraden) */
   esses: number;
-  /** Richtungswechsel ohne nennenswerte Gerade (≤ 1/3 Gerade) */
+  /** davon Schikanen: Richtungswechsel ohne nennenswerte Gerade (≤ 1/3 Gerade), gewichtet */
   chicanes: number;
-  /** Kurven mit wechselndem Radius */
+  /** Kurven, die sich deutlich zuziehen oder öffnen (Radiuswechsel um ≥ 2 Stufen oder auf Kurve 1) */
   parabolic: number;
-  /** lange Gerade (≥ 3 Standardgeraden) in eine sich zuziehende Kurve */
-  longIntoTight: number;
-  /** Anzahl verschiedener Radien (ohne Steilkurven) */
-  radii: number;
+  /** Kurvengruppen je Meter */
+  density: number;
+  /** Anteil der Drehung auf Kurve 1 (ohne Steilkurven) */
+  tightShare: number;
   bankedShare: number;
 }
 
+/** Enge einer Kurve: Kurve 1 = 1 … Kurve 4 = 0,3; Steilkurven halb so schwer */
+function tightness(radius: number, banked: boolean) {
+  const t = radius <= 300 ? 1 : radius <= 500 ? 0.75 : radius <= 700 ? 0.5 : 0.3;
+  return banked ? t * 0.5 : t;
+}
+
 export function difficultyFeatures(pieces: { partId: string; dir: Dir }[]): DifficultyFeatures {
-  type Run = { kind: 'straight'; length: number } | { kind: 'curve'; dir: Dir; angle: number; radii: number[] };
+  type Run = { kind: 'straight'; length: number }
+    | { kind: 'curve'; dir: Dir; angle: number; radii: number[]; weighted: number };
   const runs: Run[] = [];
-  let total = 0, banked = 0;
-  const radiusSet = new Set<number>();
+  let total = 0, banked = 0, tight = 0, length = 0;
   for (const pc of pieces) {
     const part = PART_BY_ID.get(pc.partId)!;
     const g = part.geometry;
     const last = runs[runs.length - 1];
     if (g.kind === 'straight') {
+      length += g.length;
       if (last && last.kind === 'straight') last.length += g.length;
       else runs.push({ kind: 'straight', length: g.length });
     } else if (g.kind === 'curve') {
+      const b = isBanked(part);
+      length += pieceLength(g);
       total += g.angle;
-      if (isBanked(part)) banked += g.angle;
-      else radiusSet.add(g.radius);
+      if (b) banked += g.angle;
+      else if (g.radius <= 300) tight += g.angle;
+      const w = g.angle * tightness(g.radius, b);
       if (last && last.kind === 'curve' && last.dir === pc.dir) {
         last.angle += g.angle;
+        last.weighted += w;
         if (last.radii[last.radii.length - 1] !== g.radius) last.radii.push(g.radius);
       } else {
-        runs.push({ kind: 'curve', dir: pc.dir, angle: g.angle, radii: [g.radius] });
+        runs.push({ kind: 'curve', dir: pc.dir, angle: g.angle, radii: [g.radius], weighted: w });
       }
     }
   }
@@ -487,13 +502,24 @@ export function difficultyFeatures(pieces: { partId: string; dir: Dir }[]): Diff
       runs.pop();
     }
   }
-  const f: DifficultyFeatures = { esses: 0, chicanes: 0, parabolic: 0, longIntoTight: 0, radii: radiusSet.size, bankedShare: total ? banked / total : 0 };
+  const curves = runs.filter(r => r.kind === 'curve').length;
+  const f: DifficultyFeatures = {
+    esses: 0, chicanes: 0, parabolic: 0,
+    density: length ? curves / (length / 1000) : 0,
+    tightShare: total ? tight / total : 0,
+    bankedShare: total ? banked / total : 0,
+  };
+  // Schwere einer Kurvengruppe: Winkel (90° = 1, höchstens 1) × Enge
+  const severity = (r: { angle: number; weighted: number }) => Math.min(1, r.weighted / 90);
+  const step = (r: number) => r <= 300 ? 1 : r <= 500 ? 2 : r <= 700 ? 3 : 4;
   const n = runs.length;
   for (let i = 0; i < n; i++) {
     const r = runs[i];
     if (r.kind !== 'curve') continue;
-    if (r.radii.length > 1) f.parabolic++;
-    // nächste Kurvengruppe und die Gerade dazwischen
+    if (r.angle >= 60 && r.radii.length > 1) {
+      const steps = r.radii.map(step);
+      if (Math.max(...steps) - Math.min(...steps) >= 2 || (steps.includes(1) && r.radii[r.radii.length - 1] <= 300)) f.parabolic++;
+    }
     let gap = 0, j = (i + 1) % n;
     while (runs[j].kind === 'straight' && j !== i) {
       gap += (runs[j] as { length: number }).length;
@@ -501,31 +527,28 @@ export function difficultyFeatures(pieces: { partId: string; dir: Dir }[]): Diff
     }
     const next = runs[j];
     if (next.kind === 'curve' && next.dir !== r.dir) {
-      if (gap < 690) f.esses++;
-      if (gap <= 116) f.chicanes++;
-    }
-    // lange Gerade davor und Kurve zieht sich zu
-    const prev = runs[(i - 1 + n) % n];
-    if (prev.kind === 'straight' && prev.length >= 1035 && r.radii.length > 1 && r.radii[r.radii.length - 1] < r.radii[0]) {
-      f.longIntoTight++;
+      const w = Math.min(severity(r), severity(next));
+      if (gap < 690) f.esses += w;
+      if (gap <= 116) f.chicanes += w;
     }
   }
   return f;
 }
 
 /**
- * Schwierigkeit 0–1. Oval und Acht liegen bei ~0, Strecken mit mehreren
- * S-Kurven im mittleren Bereich, Schikanen und Kurven mit wechselndem Radius
- * machen eine Strecke schwer.
+ * Schwierigkeit 0–1 – was Fahrer fordert (Slotcar-Ratgeber): enge S-Kurven
+ * und Schikanen ohne Erholungsgerade, sich zuziehende Kurven, viele Kurven
+ * auf kurzer Strecke. Oval, Acht und Strecken mit flachen 30°-Schlenkern
+ * bleiben leicht.
  */
 export function scoreDifficulty(pieces: { partId: string; dir: Dir }[], _crossings = 0): number {
   const f = difficultyFeatures(pieces);
   const score =
-    0.3 * Math.min(1, f.esses / 4) +
-    0.25 * Math.min(1, f.parabolic / 2) +
-    0.2 * Math.min(1, f.chicanes / 2) +
-    0.1 * Math.min(1, f.longIntoTight) +
-    0.15 * Math.max(0, Math.min(1, (f.radii - 1) / 2)) -
+    0.4 * Math.min(1, f.esses / 3) +
+    0.2 * Math.min(1, f.chicanes / 1.5) +
+    0.15 * Math.min(1, f.parabolic / 2) +
+    0.15 * Math.max(0, Math.min(1, (f.density - 0.6) / 0.8)) +
+    0.1 * f.tightShare -
     0.1 * f.bankedShare;
   return Math.max(0, Math.min(1, score));
 }
@@ -635,7 +658,7 @@ function buildCorners(ctx: Context, used: Record<string, number>, target: number
   };
   const angleOf = (pieces: string[]) => pieces.reduce((s, id) => s + (PART_BY_ID.get(id)!.geometry as { angle: number }).angle, 0);
 
-  for (let guard = 0; guard < 40; guard++) {
+  for (let guard = 0; guard < 60; guard++) {
     const remaining = target - turned;
     if (remaining === 0 && corners.length >= 3) return corners;
     const need: Dir = remaining > 0 ? 1 : remaining < 0 ? -1 : (lastDir === 1 ? -1 : 1);
@@ -644,7 +667,7 @@ function buildCorners(ctx: Context, used: Record<string, number>, target: number
     if (rand() < profile.chicane && corners.length > 0) {
       const r = pickRadius();
       if (r !== undefined) {
-        const a = rand() < 0.5 ? 30 : 60;
+        const a = profile.chicaneAngles[Math.floor(rand() * profile.chicaneAngles.length)];
         const d: Dir = rand() < 0.5 ? 1 : -1;
         const p1 = take([r], a);
         const p2 = p1 ? take([r], angleOf(p1)) : null;
@@ -658,13 +681,13 @@ function buildCorners(ctx: Context, used: Record<string, number>, target: number
 
     // S-Kurve: Gegenkurve, nur wenn noch genug Drehung übrig ist
     let dir: Dir = need;
-    if (Math.abs(remaining) >= 90 && rand() < profile.reversal) dir = need === 1 ? -1 : 1;
+    if ((Math.abs(remaining) >= 90 || profile.reversalMax > 90) && rand() < profile.reversal) dir = need === 1 ? -1 : 1;
 
     const radius = pickRadius();
     if (radius === undefined) return null;
     let angle = profile.corners[Math.floor(rand() * profile.corners.length)];
     if (dir === need && remaining !== 0) angle = Math.min(angle, Math.abs(remaining));
-    if (dir !== need) angle = Math.min(angle, 60);
+    if (dir !== need) angle = Math.min(angle, profile.reversalMax);
 
     // Kurve mit wechselndem Radius (weit → eng oder eng → weit)
     let seq = [radius];
@@ -1070,7 +1093,8 @@ function signature(moves: Move[]) {
 /** Rangfolge: gewünschte Schwierigkeit und Ebenen, dann möglichst lang. */
 function rank(l: Layout, opts: GeneratorOptions, maxLen: number) {
   const [lo, hi] = DIFFICULTY_BANDS[opts.difficulty];
-  const target = (lo + hi) / 2;
+  // „schwer“: je schwieriger, desto besser
+  const target = opts.difficulty === 'hard' ? 1 : (lo + hi) / 2;
   const inBand = l.difficultyScore >= lo && l.difficultyScore < hi + (opts.difficulty === 'hard' ? 1 : 0);
   return (inBand ? 3 : 0) +
     5 * Math.min(l.levelsUsed - 1, opts.levels - 1) -
@@ -1095,7 +1119,8 @@ export async function generateLayouts(opts: GeneratorOptions, onProgress?: (f: n
   if (warnings.length) return { layouts: [], attempts: 0, warnings };
   const ctx = buildContext(opts);
   const maxResults = opts.maxResults ?? 3;
-  const budget = opts.timeBudgetMs ?? 2500;
+  // „schwer“ findet seltener passende Strecken – etwas länger suchen
+  const budget = opts.timeBudgetMs ?? (opts.difficulty === 'hard' ? 4000 : 2500);
   const t0 = Date.now();
   const found = new Map<string, Layout>();
   const seen = new Set<string>();
@@ -1117,6 +1142,8 @@ export async function generateLayouts(opts: GeneratorOptions, onProgress?: (f: n
   let all = [...found.values()];
   // Mehrere Ebenen gewünscht: Strecken ohne Brücke nur zeigen, wenn es keine mit Brücke gibt
   if (opts.levels > 1 && all.some(l => l.levelsUsed > 1)) all = all.filter(l => l.levelsUsed > 1);
+  // gewünschte Schwierigkeit: andere Stufen nur zeigen, wenn keine passende Strecke gefunden wurde
+  if (all.some(l => l.difficulty === opts.difficulty)) all = all.filter(l => l.difficulty === opts.difficulty);
   const layouts = all
     .sort((a, b) => rank(b, opts, ctx.maxLength) - rank(a, opts, ctx.maxLength))
     .slice(0, maxResults);

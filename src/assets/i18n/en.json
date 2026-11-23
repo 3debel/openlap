@@ -1,4 +1,10 @@
 {
+  "Front (drivers)": "Front (drivers' side)",
+  "Additional feed": "Additional feed",
+  "Original power supply": "Original power supply",
+  "Stronger power supply": "Stronger power supply",
+  "series_indicator_hint": "A tick shows that you have entered parts of this series. All Evolution track also fits Digital 132 – shared parts appear in both lists and are counted only once.",
+  "Parts entered": "Parts entered",
   "Control Unit position": "Control Unit position",
   "Front": "Front",
   "Back": "Back",

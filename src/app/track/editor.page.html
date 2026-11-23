@@ -118,25 +118,11 @@
   <div class="section-label">{{'Power supply' | translate}}</div>
   <ion-list [inset]="true">
     <ion-item>
-      <ion-label>{{'Source for additional supply' | translate}}</ion-label>
-    </ion-item>
-    <ion-item lines="full">
-      <ion-segment [value]="draft.options.feedSource" (ionChange)="setFeedSource($any($event.detail.value))">
-        <ion-segment-button value="internal"><ion-label>{{'Internal' | translate}}</ion-label></ion-segment-button>
-        <ion-segment-button value="external"><ion-label>{{'External' | translate}}</ion-label></ion-segment-button>
-      </ion-segment>
-    </ion-item>
-    <ion-item>
-      <ion-label class="ion-text-wrap">
-        <p>{{('feed_source_hint_' + draft.options.feedSource) | translate: supplyParams}}</p>
-      </ion-label>
-    </ion-item>
-    <ion-item>
-      <ion-label>{{'Track connections' | translate}}</ion-label>
-      <ion-segment slot="end" class="small" [value]="draft.options.joints" (ionChange)="setJointCondition($any($event.detail.value))">
-        <ion-segment-button value="new"><ion-label>{{'New' | translate}}</ion-label></ion-segment-button>
-        <ion-segment-button value="used"><ion-label>{{'Used' | translate}}</ion-label></ion-segment-button>
-      </ion-segment>
+      <ion-select [label]="'Additional feed' | translate" interface="popover" [value]="draft.options.feedSource"
+                  (ionChange)="setFeedSource($any($event.detail.value))">
+        <ion-select-option value="internal">{{'Original power supply' | translate}}</ion-select-option>
+        <ion-select-option value="external">{{'Stronger power supply' | translate}}</ion-select-option>
+      </ion-select>
     </ion-item>
   </ion-list>
 

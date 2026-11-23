@@ -174,7 +174,7 @@ export class TrackPage implements OnDestroy {
         minLaneChanges: this.options.minLaneChanges,
         difficulty: this.options.difficulty,
         counts,
-        chargingStations: this.options.chargingStations ?? 0,
+        chargingStations: 0,
         direction: this.options.direction ?? 'auto',
         cuEdge: this.options.cuEdge ?? 'front',
         maxResults: 3,
@@ -265,7 +265,8 @@ export class TrackPage implements OnDestroy {
       if (p.geometry.kind !== 'unknown') counts[p.id] = Infinity;
     }
     // ohne Digital-Serie keine Weichen vorschlagen, außer sie werden ausdrücklich verlangt
-    if (!this.inventory.series.includes('digital132') && this.options.minLaneChanges === 0) {
+    const hasDigital = PARTS.some(p => p.series.length === 1 && p.series[0] === 'digital132' && (this.inventory.counts[p.id] ?? 0) > 0);
+    if (!hasDigital && this.options.minLaneChanges === 0) {
       for (const id of LANE_CHANGE_IDS) delete counts[id];
     }
     return counts;

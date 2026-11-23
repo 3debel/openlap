@@ -24,17 +24,15 @@
         </p>
         <p *ngIf="row.pieces === 0">{{'No parts entered yet' | translate}}</p>
       </ion-label>
-      <button slot="end" class="check" type="button"
-              [attr.aria-pressed]="row.selected"
-              [attr.aria-label]="'I own this series' | translate"
-              (click)="toggle($event, row.series.id)">
-        <ion-icon [name]="row.selected ? 'checkmark-circle' : 'ellipse-outline'"
-                  [color]="row.selected ? 'success' : 'medium'"></ion-icon>
-      </button>
+      <span slot="end" class="check" role="img"
+            [attr.aria-label]="(row.pieces > 0 ? 'Parts entered' : 'No parts entered yet') | translate">
+        <ion-icon [name]="row.pieces > 0 ? 'checkmark-circle' : 'ellipse-outline'"
+                  [color]="row.pieces > 0 ? 'success' : 'medium'" aria-hidden="true"></ion-icon>
+      </span>
     </ion-item>
   </ion-list>
 
   <p class="footnote">
-    {{'Tick the series you own. All Evolution track also fits Digital 132 – shared parts are counted only once.' | translate}}
+    {{'series_indicator_hint' | translate}}
   </p>
 </ion-content>

@@ -55,7 +55,9 @@ const OPTIONS = 'autotrack-options';
 
 /** Frühere Einstellwerte (z. B. fester Einspeiseabstand) auf gültige Werte bringen. */
 function fixOptions(o: AutoTrackOptions): AutoTrackOptions {
-  if (o.joints !== 'new' && o.joints !== 'used') o.joints = 'new';
+  // Schienenverbindungen werden immer als „neu“ gerechnet, Ladeschalen nicht mehr abgefragt
+  o.joints = 'new';
+  o.chargingStations = 0;
   if (!['cw', 'ccw', 'auto'].includes(o.direction)) o.direction = 'auto';
   if (!['front', 'back', 'left', 'right', 'any'].includes(o.cuEdge)) o.cuEdge = 'front';
   delete (o as { feedSpacing?: number }).feedSpacing;
