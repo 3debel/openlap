@@ -1,0 +1,233 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/tabs/track" text=""></ion-back-button>
+      <ion-button class="undo" (click)="undo()" [disabled]="!history.length" [attr.aria-label]="'Undo' | translate">
+        <ion-icon slot="icon-only" name="arrow-undo"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>{{draft?.name || ('Edit track' | translate)}}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="save()" [strong]="true" [disabled]="!layout">{{'Save' | translate}}</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" *ngIf="draft && evaluation && layout; else nodraft">
+
+  <!-- ===== Status ===== -->
+  <div class="status">
+    <span class="chip ok" *ngIf="evaluation.closed">
+      <ion-icon name="checkmark-circle"></ion-icon>{{'Track is closed' | translate}}
+    </span>
+    <span class="chip warn" *ngIf="!evaluation.closed">
+      <ion-icon name="warning-sharp"></ion-icon>
+      {{ 'gap_status' | translate: { mm: evaluation.gap, deg: evaluation.headingGap } }}
+    </span>
+    <span class="chip bad" *ngIf="evaluation.outside">{{'Outside the floor area' | translate}}</span>
+    <ng-container *ngIf="evaluation.closed">
+      <span class="chip bad" *ngIf="problems.length">{{'Pieces overlap' | translate}}</span>
+      <span class="chip bad" *ngIf="!evaluation.accessoriesFit">{{'No room for Control Unit / chargers' | translate}}</span>
+    </ng-container>
+  </div>
+
+  <!-- ===== Draufsicht ===== -->
+  <div class="map">
+    <layout-view [layout]="layout" [power]="power" [selectable]="true" [selected]="selected" [problems]="evaluation.closed ? problems : []"
+                 (pieceTap)="select($event)" [label]="'Track' | translate"></layout-view>
+    <div class="facts">
+      <span><strong>{{meters(evaluation.length)}} m</strong></span>
+      <span>{{moves.length}} {{'Parts' | translate}}</span>
+      <span>{{evaluation.laneChanges}} {{'Lane changes' | translate}}</span>
+      <span>{{evaluation.levelsUsed}} {{'Levels' | translate}}</span>
+      <span class="badge" [class]="'badge ' + evaluation.difficulty">{{difficultyKey() | translate}}</span>
+    </div>
+    <p class="hint">{{'Tap a track piece to select it.' | translate}}</p>
+  </div>
+
+  <!-- ===== Auswahl & Werkzeuge ===== -->
+  <div class="selection">
+    <button type="button" class="nav" (click)="step(-1)" [attr.aria-label]="'Previous piece' | translate">
+      <ion-icon name="chevron-back"></ion-icon>
+    </button>
+    <part-icon [part]="selectedPart!" *ngIf="selectedPart"></part-icon>
+    <div class="sel-text">
+      <strong>{{name(selectedPart)}}</strong>
+      <span>{{ 'piece_of' | translate: { n: selected + 1, total: moves.length } }}<ng-container *ngIf="dims(selectedPart)"> · {{dims(selectedPart)}}</ng-container></span>
+    </div>
+    <button type="button" class="nav" (click)="step(1)" [attr.aria-label]="'Next piece' | translate">
+      <ion-icon name="chevron-forward"></ion-icon>
+    </button>
+  </div>
+
+  <div class="tools">
+    <button type="button" (click)="openPicker('replace')" [disabled]="selectedIsStart">
+      <ion-icon name="repeat"></ion-icon><span>{{'Replace' | translate}}</span>
+    </button>
+    <button type="button" (click)="openPicker('insert-before')" [disabled]="selectedIsStart">
+      <ion-icon name="arrow-back-circle-outline"></ion-icon><span>{{'Insert before' | translate}}</span>
+    </button>
+    <button type="button" (click)="openPicker('insert-after')">
+      <ion-icon name="arrow-forward-circle-outline"></ion-icon><span>{{'Insert after' | translate}}</span>
+    </button>
+    <button type="button" (click)="flip()" [disabled]="!selectedIsCurve">
+      <ion-icon name="swap-horizontal"></ion-icon><span>{{'Flip curve' | translate}}</span>
+    </button>
+    <button type="button" class="danger" (click)="remove()" [disabled]="selectedIsStart">
+      <ion-icon name="trash-outline"></ion-icon><span>{{'Remove' | translate}}</span>
+    </button>
+  </div>
+  <p class="footnote" *ngIf="selectedIsStart">{{'The Control Unit is always start/finish and cannot be removed.' | translate}}</p>
+
+  <div class="actions" *ngIf="!evaluation.closed">
+    <ion-button expand="block" (click)="autoClose()">
+      <ion-icon name="magnet" slot="start"></ion-icon>{{'Close automatically' | translate}}
+    </ion-button>
+    <p class="footnote">{{'Adjusts two straight sections so the track closes. Missing rotation must be fixed with curves.' | translate}}</p>
+  </div>
+
+  <!-- ===== Name & Beschreibung ===== -->
+  <div class="section-label">{{'Details' | translate}}</div>
+  <ion-list [inset]="true">
+    <ion-item>
+      <ion-input [label]="'Name' | translate" labelPlacement="stacked" [(ngModel)]="draft.name" (ionInput)="markDirty()"
+                 [placeholder]="'e.g. Living room GP' | translate"></ion-input>
+    </ion-item>
+    <ion-item>
+      <ion-textarea [label]="'Description' | translate" labelPlacement="stacked" [autoGrow]="true" [(ngModel)]="draft.description"
+                    (ionInput)="markDirty()" [placeholder]="'Notes, setup tips …' | translate"></ion-textarea>
+    </ion-item>
+  </ion-list>
+  <div class="actions secondary" *ngIf="draft.id">
+    <ion-button fill="clear" size="small" (click)="save(true)">{{'Save as new track' | translate}}</ion-button>
+  </div>
+
+  <!-- ===== Stromversorgung ===== -->
+  <div class="section-label">{{'Power supply' | translate}}</div>
+  <ion-list [inset]="true">
+    <ion-item>
+      <ion-label>{{'Source for additional supply' | translate}}</ion-label>
+    </ion-item>
+    <ion-item lines="full">
+      <ion-segment [value]="draft.options.feedSource" (ionChange)="setFeedSource($any($event.detail.value))">
+        <ion-segment-button value="internal"><ion-label>{{'Internal' | translate}}</ion-label></ion-segment-button>
+        <ion-segment-button value="external"><ion-label>{{'External' | translate}}</ion-label></ion-segment-button>
+      </ion-segment>
+    </ion-item>
+    <ion-item>
+      <ion-label class="ion-text-wrap">
+        <p>{{('feed_source_hint_' + draft.options.feedSource) | translate}}</p>
+      </ion-label>
+    </ion-item>
+    <ion-item>
+      <ion-label>{{'Feed every' | translate}}</ion-label>
+      <ion-segment slot="end" class="small" [value]="'' + draft.options.feedSpacing" (ionChange)="setFeedSpacing($any(+$event.detail.value))">
+        <ion-segment-button value="5000"><ion-label>5 m</ion-label></ion-segment-button>
+        <ion-segment-button value="2500"><ion-label>2,5 m</ion-label></ion-segment-button>
+      </ion-segment>
+    </ion-item>
+  </ion-list>
+
+  <div class="notice warn" *ngIf="draft.options.feedSource === 'external'">
+    <ion-icon name="warning-sharp"></ion-icon>
+    <span>{{'power_note_external' | translate}}</span>
+  </div>
+
+  <ng-container *ngIf="power; else noPower">
+    <div class="notice" *ngFor="let n of power.notes">
+      <ion-icon name="information-circle-sharp"></ion-icon>
+      <span>{{n | translate}}</span>
+    </div>
+    <ion-list [inset]="true" *ngIf="power.points.length">
+      <ng-container *ngFor="let p of power.points">
+        <ion-item button [detail]="false" (click)="toggleFeed(p.no)">
+          <span slot="start" class="feed-no">{{p.no}}</span>
+          <ion-label class="ion-text-wrap">
+            <h3>{{ 'feed_point_title' | translate: { piece: p.piece + 1, at: meters(p.at) } }}</h3>
+            <p>{{'Cable' | translate}}: {{cableName(p)}} · {{ 'cable_needed' | translate: { m: meters(p.cableNeeded) } }}</p>
+          </ion-label>
+          <ion-icon slot="end" [name]="openFeed === p.no ? 'chevron-up' : 'chevron-down'" color="medium"></ion-icon>
+        </ion-item>
+        <div class="steps" *ngIf="openFeed === p.no">
+          <ol>
+            <li>{{'feed_step_1' | translate}}</li>
+            <li>{{ 'feed_step_2' | translate: { cable: cableName(p) } }}</li>
+            <li>{{ 'feed_step_3' | translate: { piece: p.piece + 1, at: meters(p.at) } }}</li>
+            <li>{{ 'feed_step_4' | translate: { piece: p.piece + 1 } }}</li>
+            <li class="important">{{'feed_step_5' | translate}}</li>
+            <li>{{'feed_step_6' | translate}}</li>
+          </ol>
+        </div>
+      </ng-container>
+    </ion-list>
+    <p class="footnote">{{'Orange dashed lines show the cable runs from the connection track (star wiring).' | translate}}</p>
+  </ng-container>
+  <ng-template #noPower>
+    <p class="footnote">{{'The power plan appears once the track is closed.' | translate}}</p>
+  </ng-template>
+
+  <!-- ===== Teileliste ===== -->
+  <ng-container *ngIf="partsList">
+    <div class="section-label">{{'Parts list' | translate}}</div>
+    <ion-list [inset]="true">
+      <ion-item *ngFor="let r of partsList.track" [class.missing]="r.missing > 0">
+        <span slot="start" class="qty">{{r.count}}×</span>
+        <ion-label class="ion-text-wrap">
+          <h3>{{r.name}}</h3>
+          <p>{{r.articleNo}}<ng-container *ngIf="r.missing > 0"> · <span class="miss">{{ 'n_missing' | translate: { n: r.missing } }}</span></ng-container></p>
+        </ion-label>
+      </ion-item>
+    </ion-list>
+    <ng-container *ngIf="partsList.accessories.length">
+      <div class="section-label">{{'Accessories' | translate}}</div>
+      <ion-list [inset]="true">
+        <ion-item *ngFor="let r of partsList.accessories">
+          <span slot="start" class="qty">{{r.count}}×</span>
+          <ion-label class="ion-text-wrap">
+            <h3>{{r.name}}</h3>
+            <p>{{r.articleNo}}</p>
+          </ion-label>
+        </ion-item>
+      </ion-list>
+    </ng-container>
+    <p class="footnote">{{'Supports, borders and guard rails are not included in the list.' | translate}}</p>
+  </ng-container>
+
+  <!-- ===== Teile-Auswahl ===== -->
+  <ion-modal [isOpen]="pickerOpen" (didDismiss)="pickerOpen = false" [initialBreakpoint]="0.6" [breakpoints]="[0, 0.6, 1]">
+    <ng-template>
+      <ion-header>
+        <ion-toolbar>
+          <ion-title>{{('picker_' + pickerMode) | translate}}</ion-title>
+          <ion-buttons slot="end">
+            <ion-button (click)="pickerOpen = false">{{'Cancel' | translate}}</ion-button>
+          </ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content>
+        <ng-container *ngFor="let s of pickerSections">
+          <div class="section-label">{{s.label | translate}}</div>
+          <ion-list [inset]="true">
+            <ion-item *ngFor="let p of s.parts" button [detail]="false" (click)="pick(p)">
+              <part-icon slot="start" [part]="p"></part-icon>
+              <ion-label class="ion-text-wrap">
+                <h3>{{name(p)}}</h3>
+                <p>{{p.articleNo}} · {{dims(p)}}</p>
+              </ion-label>
+              <ion-note slot="end">{{ 'n_owned' | translate: { n: owned(p) } }}</ion-note>
+            </ion-item>
+          </ion-list>
+        </ng-container>
+      </ion-content>
+    </ng-template>
+  </ion-modal>
+</ion-content>
+
+<ng-template #nodraft>
+  <ion-content>
+    <div class="empty">
+      <p>{{'No track opened.' | translate}}</p>
+      <ion-button fill="clear" routerLink="/tabs/track">{{'Back to Track' | translate}}</ion-button>
+    </div>
+  </ion-content>
+</ng-template>

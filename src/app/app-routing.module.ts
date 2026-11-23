@@ -5,7 +5,7 @@ import { RmsPage } from './rms';
 import { DriversPage } from './drivers';
 import { TuningPage } from './tuning';
 import { GaragePage, StatsPage, TabsPage, TrackPage } from './tabs';
-import { PartsPage, SeriesPage } from './track';
+import { EditorPage, PartsPage, SeriesPage } from './track';
 
 const routes: Routes = [
   {
@@ -23,6 +23,7 @@ const routes: Routes = [
       { path: 'garage/drivers', component: DriversPage },
       { path: 'garage/tuning', component: TuningPage },
       { path: 'track', component: TrackPage },
+      { path: 'track/edit', component: EditorPage },
       { path: 'race', redirectTo: 'race/practice', pathMatch: 'full' },
       { path: 'race/:mode', component: RmsPage },
       { path: 'stats', component: StatsPage },

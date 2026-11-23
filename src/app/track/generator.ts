@@ -32,9 +32,25 @@ export interface GeneratorOptions {
   difficulty: Difficulty;
   /** verfügbare Stückzahl je Teil (Infinity = unbegrenzt) */
   counts: Record<string, number>;
+  /** Anzahl WIRELESS+ Ladeschalen (je 2 an einer Adapter Unit) */
+  chargingStations?: number;
   maxResults?: number;
   timeBudgetMs?: number;
   seed?: number;
+}
+
+/** Stellfläche neben der Bahn (Control Unit, Ladeschale), Maße in mm */
+export interface AccessoryBox {
+  kind: 'controlunit' | 'charger';
+  /** Mittelpunkt */
+  x: number;
+  y: number;
+  /** Ausdehnung entlang der Fahrbahn / quer dazu */
+  along: number;
+  across: number;
+  heading: number;
+  /** Index des Bahnteils, an dem das Zubehör angeschlossen ist */
+  piece: number;
 }
 
 export interface PlacedPiece {
@@ -60,6 +76,8 @@ export interface Layout {
   difficultyScore: number;
   difficulty: Difficulty;
   partCounts: Record<string, number>;
+  chargingStations: number;
+  accessories: AccessoryBox[];
 }
 
 export interface GeneratorResult {
@@ -139,8 +157,20 @@ const PART_BY_ID = new Map(PARTS.map(p => [p.id, p]));
 
 const STRAIGHT_IDS = ['20020509', '20020611', '20020612'];
 const STANDARD = '20020509';
-const CONNECTION = 'connection-straight';
-const LANE_CHANGE_IDS = ['20030343', '20030345', '20030347'];
+export const CONNECTION = 'connection-straight';
+export const ADAPTER = '20030360';
+/** Teile, die immer verfügbar angenommen werden (fehlen sie im Bestand, erscheinen sie als „fehlend“) */
+const ASSUMED = [CONNECTION, ADAPTER];
+
+/** Stellflächen (Näherung): Control Unit und Ladeschale neben der Fahrbahn */
+const CU_SIZE = { along: 230, across: 150 };
+const CHARGER_SIZE = { along: 110, across: 140 };
+const ACCESSORY_GAP = 50;
+
+export function adapterUnitsFor(chargingStations: number) {
+  return Math.ceil(Math.max(0, chargingStations) / 2);
+}
+export const LANE_CHANGE_IDS = ['20030343', '20030345', '20030347'];
 
 function isCurve(p: Part) {
   return p.geometry.kind === 'curve';
@@ -154,7 +184,7 @@ function radiusOf(p: Part): number {
   return p.geometry.kind === 'curve' ? p.geometry.radius : 0;
 }
 
-interface Move {
+export interface Move {
   partId: string;
   dir: Dir;
 }
@@ -576,13 +606,15 @@ function attempt(ctx: Context, seen: Set<string>): Layout | null {
     const extra = rand() < 0.25 ? (rand() < 0.5 ? 3 : 4) : 0;
     return n * 12 + extra;
   });
-  units[0] = Math.max(units[0], 12);                              // Platz für Anschlussgerade
+  const startUnits = 12 * (1 + adapterUnitsFor(opts.chargingStations ?? 0));
+  units[0] = Math.max(units[0], startUnits);                      // Control Unit + Adapter Units
 
   // Zwei Geraden mit verschiedener Richtung so lang machen, dass die Strecke schließt
   const pairs: [number, number][] = [];
   for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) pairs.push([i, j]);
   shuffle(rand, pairs);
-  const total345 = avail(opts, STANDARD) + avail(opts, CONNECTION) + LANE_CHANGE_IDS.reduce((s, id) => s + avail(opts, id), 0);
+  const total345 = avail(opts, STANDARD) + 1 + adapterUnitsFor(opts.chargingStations ?? 0) +
+    LANE_CHANGE_IDS.reduce((s, id) => s + avail(opts, id), 0);
 
   for (const [i, j] of pairs.slice(0, 40)) {
     const hi = (runHeading[i] * Math.PI) / 180, hj = (runHeading[j] * Math.PI) / 180;
@@ -609,7 +641,7 @@ function attempt(ctx: Context, seen: Set<string>): Layout | null {
       const runs = [...units];
       runs[i] = ni;
       runs[j] = nj;
-      if (i === 0 && ni < 12) continue;
+      if (i === 0 && ni < startUnits) continue;
       const layout = assemble(ctx, corners, runs, total345, seen);
       if (layout) return layout;
     }
@@ -634,10 +666,10 @@ function assemble(ctx: Context, corners: Corner[], runs: number[], total345: num
 
   // 345er-Plätze: Anschlussgerade, Weichen (am Ende langer Geraden), Rest Standardgeraden
   const slotIds: string[][] = parts.map(([a]) => Array(a).fill(STANDARD));
-  if (avail(opts, CONNECTION) > 0) {
-    if (!slotIds[0].length) return null;
-    slotIds[0][0] = CONNECTION;
-  }
+  const adapters = adapterUnitsFor(opts.chargingStations ?? 0);
+  if (slotIds[0].length < 1 + adapters) return null;
+  slotIds[0][0] = CONNECTION;                       // Start/Ziel: Control Unit immer zuerst
+  for (let a = 1; a <= adapters; a++) slotIds[0][a] = ADAPTER;
   const laneLeft = LANE_CHANGE_IDS.flatMap(id => Array(Math.min(avail(opts, id), 20)).fill(id));
   let placedLC = 0;
   const order = runs.map((n, i) => i).sort((x, y) => runs[y] - runs[x]);
@@ -703,7 +735,7 @@ function finalize(ctx: Context, moves: Move[]): Layout | null {
   const counts: Record<string, number> = {};
   for (const m of moves) counts[m.partId] = (counts[m.partId] ?? 0) + 1;
   for (const [id, n] of Object.entries(counts)) {
-    if (n > (opts.counts[id] ?? 0)) return null;
+    if (!ASSUMED.includes(id) && n > (opts.counts[id] ?? 0)) return null;
   }
   const laneChanges = moves.filter(m => LANE_CHANGE_IDS.includes(m.partId)).length;
   if (laneChanges < opts.minLaneChanges) return null;
@@ -727,6 +759,8 @@ function finalize(ctx: Context, moves: Move[]): Layout | null {
   }));
   const supports = heights.joints.filter(h => h > 0.05).length;
   const score = scoreDifficulty(moves, analysis.crossings.length);
+  const accessories = placeAccessories(pieces, opts.chargingStations ?? 0, opts.areaWidth, opts.areaDepth);
+  if (!accessories) return null;
 
   return {
     pieces,
@@ -740,7 +774,82 @@ function finalize(ctx: Context, moves: Move[]): Layout | null {
     difficultyScore: round2(score),
     difficulty: classify(score),
     partCounts: counts,
+    chargingStations: opts.chargingStations ?? 0,
+    accessories,
   };
+}
+
+// ---------------------------------------------------------------- Zubehör-Stellflächen
+
+function pieceSamples(pieces: PlacedPiece[]): { samples: Sample[]; offset: number }[] {
+  let offset = 0;
+  return pieces.map(p => {
+    const r = { samples: transformSamples(p.start, relSamples(p.partId, p.dir)), offset };
+    offset += p.length;
+    return r;
+  });
+}
+
+/**
+ * Control Unit neben die Anschlussschiene, Ladeschalen neben die Adapter Units –
+ * zuerst außen, sonst innen. Prüft Grundfläche und Abstand zur übrigen Bahn.
+ */
+export function placeAccessories(pieces: PlacedPiece[], chargingStations: number, areaW: number, areaD: number): AccessoryBox[] | null {
+  if (!pieces.length || pieces[0].partId !== CONNECTION) return [];
+  const seq = pieceSamples(pieces);
+  const all = seq.flatMap(s => s.samples);
+  const cx = all.reduce((a, q) => a + q.x, 0) / all.length;
+  const cy = all.reduce((a, q) => a + q.y, 0) / all.length;
+  const total = pieces.reduce((a, p) => a + p.length, 0);
+
+  const wanted: { piece: number; kind: AccessoryBox['kind']; along: number; across: number; shift: number }[] =
+    [{ piece: 0, kind: 'controlunit', ...CU_SIZE, shift: 0 }];
+  let left = chargingStations;
+  for (let i = 1; i < pieces.length && left > 0; i++) {
+    if (pieces[i].partId !== ADAPTER) continue;
+    const n = Math.min(2, left);
+    for (let k = 0; k < n; k++) {
+      wanted.push({ piece: i, kind: 'charger', ...CHARGER_SIZE, shift: n === 2 ? (k === 0 ? -62 : 62) : 0 });
+    }
+    left -= n;
+  }
+
+  const boxesFor = (side: 1 | -1): AccessoryBox[] | null => {
+    const boxes: AccessoryBox[] = [];
+    for (const w of wanted) {
+      const p = pieces[w.piece];
+      const t = (p.start.heading * Math.PI) / 180;
+      const ux = Math.cos(t), uy = Math.sin(t);
+      const nx = -Math.sin(t) * side, ny = Math.cos(t) * side;
+      const d = TRACK_WIDTH / 2 + ACCESSORY_GAP + w.across / 2;
+      const mx = p.start.x + ux * (p.length / 2 + w.shift), my = p.start.y + uy * (p.length / 2 + w.shift);
+      const box: AccessoryBox = { kind: w.kind, x: mx + nx * d, y: my + ny * d, along: w.along, across: w.across, heading: p.start.heading, piece: w.piece };
+      // Ecken in der Grundfläche?
+      for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const ex = box.x + ux * a * w.along / 2 + nx * b * w.across / 2;
+        const ey = box.y + uy * a * w.along / 2 + ny * b * w.across / 2;
+        if (ex < 0 || ey < 0 || ex > areaW || ey > areaD) return null;
+      }
+      // Abstand zur übrigen Bahn (Teile, die entlang der Strecke weiter weg liegen)
+      const base = seq[w.piece].offset + p.length / 2;
+      for (const s of seq) {
+        for (const q of s.samples) {
+          if (cyclicDist(s.offset + q.s, base, total) < 450) continue;
+          const dx = q.x - box.x, dy = q.y - box.y;
+          const u = Math.abs(dx * ux + dy * uy), v = Math.abs(dx * nx + dy * ny);
+          if (u < w.along / 2 + TRACK_WIDTH / 2 && v < w.across / 2 + TRACK_WIDTH / 2) return null;
+        }
+      }
+      boxes.push(box);
+    }
+    return boxes;
+  };
+
+  // Außenseite = vom Schwerpunkt der Strecke weg
+  const p0 = pieces[0];
+  const t0 = (p0.start.heading * Math.PI) / 180;
+  const outward: 1 | -1 = ((-Math.sin(t0)) * (p0.start.x - cx) + Math.cos(t0) * (p0.start.y - cy)) >= 0 ? 1 : -1;
+  return boxesFor(outward) ?? boxesFor(outward === 1 ? -1 : 1);
 }
 
 function countMoves(moves: Move[]): Record<string, number> {
@@ -816,4 +925,279 @@ export async function generateLayouts(opts: GeneratorOptions, onProgress?: (f: n
   if (layouts.length && !layouts.some(l => l.difficulty === opts.difficulty)) warnings.push('difficulty-not-reached');
   if (layouts.length && opts.levels > 1 && !layouts.some(l => l.levelsUsed >= opts.levels)) warnings.push('levels-not-reached');
   return { layouts, attempts, warnings };
+}
+
+// ---------------------------------------------------------------- Bearbeiten (Editor)
+
+const PLAIN_STRAIGHTS = [STANDARD, '20020611', '20020612'];
+
+export interface Conflict {
+  /** Indizes der beteiligten Teile */
+  a: number;
+  b: number;
+  kind: 'overlap' | 'crossing';
+}
+
+export interface Evaluation {
+  pieces: PlacedPiece[];
+  /** Abstand Ende → Start in mm */
+  gap: number;
+  /** fehlende Drehung bis zum Schließen (Grad, −180…180) */
+  headingGap: number;
+  closed: boolean;
+  outside: boolean;
+  conflicts: Conflict[];
+  crossings: number;
+  levelsUsed: number;
+  supports: number;
+  length: number;
+  laneChanges: number;
+  partCounts: Record<string, number>;
+  difficultyScore: number;
+  difficulty: Difficulty;
+  accessories: AccessoryBox[];
+  accessoriesFit: boolean;
+}
+
+function signedHeading(d: number) {
+  const n = normalizeHeading(d);
+  return n > 180 ? n - 360 : n;
+}
+
+/** Teilefolge ab `start` legen und vollständig bewerten (ohne zu verwerfen). */
+export function evaluateMoves(moves: Move[], start: Pose, areaW: number, areaD: number, chargingStations: number): Evaluation {
+  let pose = start;
+  const placed: PlacedPiece[] = [];
+  const seq: { samples: Sample[]; offset: number }[] = [];
+  let offset = 0;
+  for (const m of moves) {
+    const g = geometryOf(m.partId);
+    const end = place(pose, g, m.dir);
+    const len = pieceLength(g);
+    seq.push({ samples: transformSamples(pose, relSamples(m.partId, m.dir)), offset });
+    placed.push({ partId: m.partId, dir: m.dir, start: pose, end, length: len, h0: 0, h1: 0 });
+    offset += len;
+    pose = end;
+  }
+  const total = offset;
+  const gap = Math.hypot(pose.x - start.x, pose.y - start.y);
+  const headingGap = signedHeading(start.heading - pose.heading);
+  const closed = moves.length > 2 && gap <= CLOSE_TOL + 2 && Math.abs(headingGap) < 0.5;
+
+  // Überschneidungen einzeln erfassen
+  const conflicts: Conflict[] = [];
+  const crossPts: Crossing[] = [];
+  // offene Strecke: Anfang und Ende liegen nur um die Lücke auseinander
+  const along = (a: number, b: number) => cyclicDist(a, b, closed ? total : total + gap);
+  for (let i = 0; i < seq.length; i++) {
+    for (let j = i + 1; j < seq.length; j++) {
+      let found: Conflict | null = null;
+      outer: for (const q of seq[i].samples) {
+        for (const o of seq[j].samples) {
+          if (Math.abs(o.x - q.x) >= CONFLICT_DIST || Math.abs(o.y - q.y) >= CONFLICT_DIST) continue;
+          if (Math.hypot(o.x - q.x, o.y - q.y) >= CONFLICT_DIST) continue;
+          const ga = seq[i].offset + q.s, gb = seq[j].offset + o.s;
+          if (along(ga, gb) < NEIGHBOR_ALONG) continue;
+          if (crossingAngle(o.heading, q.heading) < MIN_CROSS_ANGLE) {
+            found = { a: i, b: j, kind: 'overlap' };
+            break outer;
+          }
+          found = found ?? { a: i, b: j, kind: 'crossing' };
+          if (!crossPts.some(c => Math.abs(c.a - ga) < 450 && Math.abs(c.b - gb) < 450)) crossPts.push({ a: ga, b: gb });
+        }
+      }
+      if (found) conflicts.push(found);
+    }
+  }
+
+  const box = outerBox(seq.flatMap(s => s.samples));
+  const outside = box.minX < 0 || box.minY < 0 || box.maxX > areaW || box.maxY > areaD;
+
+  let levelsUsed = 1, supports = 0;
+  if (closed && !conflicts.some(c => c.kind === 'overlap') && crossPts.length) {
+    const banked = moves.map(m => isBanked(PART_BY_ID.get(m.partId)!));
+    const heights = solveHeights(crossPts, seq.map(s => s.offset), total, banked, 3);
+    if (heights) {
+      placed.forEach((p, i) => {
+        p.h0 = round2(heights.joints[i]);
+        p.h1 = round2(heights.joints[(i + 1) % placed.length]);
+      });
+      levelsUsed = Math.round(heights.maxHeight) + 1;
+      supports = heights.joints.filter(h => h > 0.05).length;
+    } else {
+      conflicts.push({ a: -1, b: -1, kind: 'overlap' });
+    }
+  }
+
+  const accessories = placeAccessories(placed, chargingStations, areaW, areaD);
+  const score = scoreDifficulty(moves, crossPts.length);
+  return {
+    pieces: placed,
+    gap: Math.round(gap),
+    headingGap: Math.round(headingGap * 10) / 10,
+    closed,
+    outside,
+    conflicts,
+    crossings: crossPts.length,
+    levelsUsed,
+    supports,
+    length: total,
+    laneChanges: moves.filter(m => LANE_CHANGE_IDS.includes(m.partId)).length,
+    partCounts: countMoves(moves),
+    difficultyScore: round2(score),
+    difficulty: classify(score),
+    accessories: accessories ?? [],
+    accessoriesFit: accessories !== null,
+  };
+}
+
+/** Bewertung in ein speicherbares Layout umwandeln. */
+export function layoutFromEvaluation(e: Evaluation, areaW: number, areaD: number, chargingStations: number): Layout {
+  return {
+    pieces: e.pieces,
+    areaWidth: areaW,
+    areaDepth: areaD,
+    length: e.length,
+    laneChanges: e.laneChanges,
+    crossings: e.crossings,
+    levelsUsed: e.levelsUsed,
+    supports: e.supports,
+    difficultyScore: e.difficultyScore,
+    difficulty: e.difficulty,
+    partCounts: e.partCounts,
+    chargingStations,
+    accessories: e.accessories,
+  };
+}
+
+export type CloseResult =
+  | { ok: true; moves: Move[]; changedPieces: number }
+  | { ok: false; reason: 'heading' | 'no-solution' | 'no-curves'; headingGap?: number };
+
+/**
+ * Strecke schließen, indem zwei Geradenabschnitte mit unterschiedlicher Richtung
+ * verlängert oder gekürzt werden (Standardgerade, 1/3, 1/4). Die Richtung muss
+ * bereits stimmen – fehlende Drehung lässt sich nur mit Kurven ausgleichen.
+ */
+export function closeByStraights(moves: Move[], start: Pose): CloseResult {
+  if (!moves.some(m => isCurve(PART_BY_ID.get(m.partId)!))) return { ok: false, reason: 'no-curves' };
+  // Drehung prüfen
+  let pose = start;
+  for (const m of moves) pose = place(pose, geometryOf(m.partId), m.dir);
+  const headingGap = signedHeading(start.heading - pose.heading);
+  if (Math.abs(headingGap) >= 0.5) return { ok: false, reason: 'heading', headingGap: Math.round(headingGap) };
+
+  // In Abschnitte zerlegen: Gerade-Abschnitt, Kurvenblock, Gerade-Abschnitt, …
+  interface Segment { fixed: Move[]; plain: Move[]; heading: number; fixedLen: number; }
+  const segments: Segment[] = [];
+  const corners: Move[][] = [];
+  let seg: Segment = { fixed: [], plain: [], heading: start.heading, fixedLen: 0 };
+  let corner: Move[] | null = null;
+  let h = start.heading;
+  for (const m of moves) {
+    const part = PART_BY_ID.get(m.partId)!;
+    if (isCurve(part)) {
+      if (!corner) {
+        segments.push(seg);
+        corner = [];
+      }
+      corner.push(m);
+      h = normalizeHeading(h + m.dir * (part.geometry as { angle: number }).angle);
+    } else {
+      if (corner) {
+        corners.push(corner);
+        corner = null;
+        seg = { fixed: [], plain: [], heading: h, fixedLen: 0 };
+      }
+      if (PLAIN_STRAIGHTS.includes(m.partId)) seg.plain.push(m);
+      else {
+        seg.fixed.push(m);
+        seg.fixedLen += pieceLength(part.geometry);
+      }
+    }
+  }
+  if (corner) {
+    corners.push(corner);
+    seg = { fixed: [], plain: [], heading: h, fixedLen: 0 };
+  }
+  segments.push(seg);
+
+  // Versatz der Kurven allein (Geraden ändern die Richtung nicht)
+  let cp: Pose = { x: 0, y: 0, heading: start.heading };
+  for (const c of corners) for (const m of c) cp = place(cp, geometryOf(m.partId), m.dir);
+  const plainUnits = segments.map(sg => sg.plain.reduce((a, m) => a + Math.round(pieceLength(geometryOf(m.partId)) / UNIT), 0));
+  const u = segments.map(sg => ({ x: Math.cos((sg.heading * Math.PI) / 180), y: Math.sin((sg.heading * Math.PI) / 180) }));
+
+  const representable = (n: number) => n === 0 || n === 3 || n === 4 || n >= 6;
+  let best: { i: number; j: number; ni: number; nj: number; cost: number } | null = null;
+
+  // Zuerst: ein einzelner Abschnitt reicht, wenn die Lücke in seiner Richtung liegt
+  for (let i = 0; i < segments.length; i++) {
+    let rx = -cp.x, ry = -cp.y;
+    segments.forEach((sg, k) => {
+      const len = sg.fixedLen + (k === i ? 0 : plainUnits[k] * UNIT);
+      rx -= len * u[k].x;
+      ry -= len * u[k].y;
+    });
+    const along = rx * u[i].x + ry * u[i].y;
+    const n0 = Math.round(along / UNIT);
+    for (const n of [n0, n0 + 1, n0 - 1]) {
+      if (n < 0 || !representable(n)) continue;
+      if (Math.hypot(n * UNIT * u[i].x - rx, n * UNIT * u[i].y - ry) > CLOSE_TOL) continue;
+      const cost = Math.abs(n - plainUnits[i]);
+      if (!best || cost < best.cost) best = { i, j: i, ni: n, nj: n, cost };
+    }
+  }
+
+  for (let i = 0; i < segments.length; i++) {
+    for (let j = i + 1; j < segments.length; j++) {
+      const det = u[i].x * u[j].y - u[i].y * u[j].x;
+      if (Math.abs(det) < 0.3) continue;
+      let rx = -cp.x, ry = -cp.y;
+      segments.forEach((sg, k) => {
+        const len = sg.fixedLen + (k === i || k === j ? 0 : plainUnits[k] * UNIT);
+        rx -= len * u[k].x;
+        ry -= len * u[k].y;
+      });
+      const li = (rx * u[j].y - ry * u[j].x) / det;
+      const lj = (u[i].x * ry - u[i].y * rx) / det;
+      const ni0 = Math.round(li / UNIT), nj0 = Math.round(lj / UNIT);
+      for (const [di, dj] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+        const ni = ni0 + di, nj = nj0 + dj;
+        if (ni < 0 || nj < 0 || !representable(ni) || !representable(nj)) continue;
+        const ex = ni * UNIT * u[i].x + nj * UNIT * u[j].x - rx;
+        const ey = ni * UNIT * u[i].y + nj * UNIT * u[j].y - ry;
+        if (Math.hypot(ex, ey) > CLOSE_TOL) continue;
+        const cost = Math.abs(ni - plainUnits[i]) + Math.abs(nj - plainUnits[j]);
+        if (!best || cost < best.cost) best = { i, j, ni, nj, cost };
+      }
+    }
+  }
+  if (!best) return { ok: false, reason: 'no-solution' };
+
+  const unlimited = { a: 999, b: 999, c: 999 };
+  const plainMoves = (n: number): Move[] => {
+    const d = decompose(n, { ...unlimited })!;
+    return [
+      ...Array(d[0]).fill({ partId: STANDARD, dir: 0 }),
+      ...Array(d[1]).fill({ partId: '20020611', dir: 0 }),
+      ...Array(d[2]).fill({ partId: '20020612', dir: 0 }),
+    ];
+  };
+  const b = best;
+  const out: Move[] = [];
+  let changed = 0;
+  segments.forEach((sg, k) => {
+    let plain = sg.plain;
+    if (k === b.i || k === b.j) {
+      const n = k === b.i ? b.ni : b.nj;
+      if (n !== plainUnits[k]) {
+        plain = plainMoves(n);
+        changed += Math.abs(plain.length - sg.plain.length) || 1;
+      }
+    }
+    out.push(...sg.fixed, ...plain);
+    if (k < corners.length) out.push(...corners[k]);
+  });
+  return { ok: true, moves: out, changedPieces: changed };
 }

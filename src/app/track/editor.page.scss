@@ -1,0 +1,210 @@
+@use 'shared';
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 16px 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+
+  ion-icon { font-size: 15px; }
+  &.ok { background: rgba(48, 209, 88, 0.18); color: #30d158; }
+  &.warn { background: rgba(255, 159, 10, 0.18); color: #ff9f0a; }
+  &.bad { background: rgba(255, 69, 58, 0.18); color: #ff453a; }
+}
+
+.map {
+  margin: 10px 16px 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: #1c1c1e;
+
+  .hint {
+    margin: 6px 2px 0;
+    font-size: 12px;
+    color: var(--ion-color-medium);
+  }
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ion-color-medium);
+  font-variant-numeric: tabular-nums;
+
+  strong { color: var(--ion-text-color); font-size: 15px; }
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+
+  &.easy { background: rgba(48, 209, 88, 0.2); color: #30d158; }
+  &.medium { background: rgba(255, 214, 10, 0.2); color: #ffd60a; }
+  &.hard { background: rgba(255, 69, 58, 0.2); color: #ff453a; }
+}
+
+.selection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 16px 0;
+  padding: 8px;
+  border-radius: 12px;
+  background: #1c1c1e;
+
+  .sel-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+
+    strong { font-size: 15px; font-weight: 600; }
+    span { font-size: 12px; color: var(--ion-color-medium); font-variant-numeric: tabular-nums; }
+  }
+
+  .nav {
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 10px;
+    background: #2c2c2e;
+    color: var(--ion-text-color);
+    font-size: 20px;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
+
+    &:active { transform: scale(0.94); }
+  }
+}
+
+.tools {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin: 8px 16px 0;
+
+  button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-height: 60px;
+    padding: 8px 2px;
+    border: 0;
+    border-radius: 12px;
+    background: #1c1c1e;
+    color: var(--ion-color-primary);
+    font-size: 11px;
+    line-height: 1.2;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), background-color 120ms;
+
+    ion-icon { font-size: 22px; }
+    span { color: var(--ion-text-color); }
+    &.danger { color: var(--ion-color-danger); }
+    &:active:not(:disabled) { transform: scale(0.96); background: #2c2c2e; }
+    &:disabled { opacity: 0.35; }
+  }
+}
+
+.actions {
+  margin: 12px 16px 0;
+
+  ion-button {
+    --border-radius: 12px;
+    height: 48px;
+    font-weight: 600;
+  }
+
+  .footnote { margin: 6px 4px 0; }
+
+  &.secondary { margin-top: -8px; }
+}
+
+ion-segment.small {
+  width: 140px;
+
+  ion-segment-button { min-width: 0; }
+}
+
+ion-item ion-segment {
+  margin: 6px 0;
+}
+
+.notice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 16px 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #1c1c1e;
+  color: var(--ion-color-medium);
+  font-size: 13px;
+  line-height: 1.45;
+
+  ion-icon { flex-shrink: 0; font-size: 18px; color: var(--ion-color-primary); }
+  &.warn ion-icon { color: var(--ion-color-warning); }
+}
+
+.feed-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  background: #ff9f0a;
+  color: #000;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.steps {
+  padding: 4px 16px 12px 52px;
+  background: var(--ion-item-background);
+  font-size: 14px;
+  line-height: 1.45;
+
+  ol { margin: 0; padding-left: 18px; }
+  li { margin: 4px 0; }
+  li.important { color: #ff9f0a; }
+}
+
+.qty {
+  min-width: 34px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+ion-item.missing .qty { color: var(--ion-color-danger); }
+.miss { color: var(--ion-color-danger); }
+
+ion-label h3 { font-size: 15px; font-weight: 500; }
+
+part-icon { margin-inline-end: 10px; }
+
+.empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--ion-color-medium);
+}
+
+ion-title {
+  padding-inline: 110px;
+}

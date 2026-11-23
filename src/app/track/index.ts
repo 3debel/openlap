@@ -7,3 +7,7 @@ export * from './geometry';
 export * from './generator';
 export * from './layout-view.component';
 export * from './layouts.service';
+export * from './editor.page';
+export * from './editor.service';
+export * from './parts-list';
+export * from './power';

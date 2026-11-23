@@ -1,12 +1,13 @@
 import { Component, OnDestroy } from '@angular/core';
 
+import { AlertController, NavController } from '@ionic/angular';
 import { TranslateService } from '@ngx-translate/core';
 
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 
 import {
-  AutoTrackOptions, DEFAULT_OPTIONS, Difficulty, Inventory, InventoryService, Layout, LayoutsService,
-  Levels, PARTS, SavedLayout, generateLayouts, partName
+  AutoTrackOptions, DEFAULT_OPTIONS, Difficulty, EditorService, FeedSource, FeedSpacing, Inventory, InventoryService,
+  Layout, LayoutsService, Levels, PARTS, PowerPlan, SavedLayout, buildPartsList, generateLayouts, partName, planPower
 } from '../track';
 
 const LANE_CHANGE_IDS = ['20030343', '20030345', '20030347'];
@@ -19,6 +20,7 @@ interface MissingPart {
 
 interface Suggestion {
   layout: Layout;
+  power: PowerPlan;
   missing: MissingPart[];
   saved: boolean;
 }
@@ -51,7 +53,10 @@ export class TrackPage implements OnDestroy {
   constructor(
     private inventoryService: InventoryService,
     private layouts: LayoutsService,
-    translate: TranslateService)
+    private editor: EditorService,
+    private nav: NavController,
+    private alert: AlertController,
+    private translate: TranslateService)
   {
     this.lang = translate.currentLang || translate.getDefaultLang();
     this.subscription.add(translate.onLangChange.subscribe(e => this.lang = e.lang));
@@ -89,6 +94,23 @@ export class TrackPage implements OnDestroy {
     this.persist();
   }
 
+  changeChargers(delta: number) {
+    this.options.chargingStations = Math.max(0, Math.min(6, (this.options.chargingStations ?? 0) + delta));
+    this.persist();
+  }
+
+  setFeedSource(value: FeedSource) {
+    this.options.feedSource = value;
+    this.refreshPower();
+    this.persist();
+  }
+
+  setFeedSpacing(value: FeedSpacing) {
+    this.options.feedSpacing = value;
+    this.refreshPower();
+    this.persist();
+  }
+
   changeLaneChanges(delta: number) {
     const max = this.availableLaneChanges;
     this.options.minLaneChanges = Math.max(0, Math.min(max, this.options.minLaneChanges + delta));
@@ -116,6 +138,7 @@ export class TrackPage implements OnDestroy {
         minLaneChanges: this.options.minLaneChanges,
         difficulty: this.options.difficulty,
         counts,
+        chargingStations: this.options.chargingStations ?? 0,
         maxResults: 3,
         timeBudgetMs: 3000,
         seed: Date.now(),
@@ -123,6 +146,7 @@ export class TrackPage implements OnDestroy {
       this.warnings = result.warnings;
       this.suggestions = result.layouts.map(layout => ({
         layout,
+        power: planPower(layout.pieces, this.options.feedSource, this.options.feedSpacing),
         missing: this.missingParts(layout),
         saved: false,
       }));
@@ -131,9 +155,47 @@ export class TrackPage implements OnDestroy {
     }
   }
 
+  /** Speichern mit Name und Beschreibung (Datum wird automatisch gesetzt). */
   async save(s: Suggestion) {
-    await this.layouts.save(s.layout, { ...this.options });
+    const t = (k: string) => firstValueFrom(this.translate.get(k));
+    const today = new Date().toLocaleDateString(this.lang);
+    const alert = await this.alert.create({
+      header: await t('Save track'),
+      inputs: [
+        { name: 'name', type: 'text', placeholder: await t('Name'), value: `${await t('Track')} ${today}` },
+        { name: 'description', type: 'textarea', placeholder: await t('Description (optional)') },
+      ],
+      buttons: [
+        { text: await t('Cancel'), role: 'cancel' },
+        { text: await t('Save'), role: 'confirm' },
+      ],
+    });
+    await alert.present();
+    const { role, data } = await alert.onDidDismiss();
+    if (role !== 'confirm') return;
+    const name = (data?.values?.name ?? '').trim() || `${await t('Track')} ${today}`;
+    await this.layouts.save(s.layout, { ...this.options }, name, (data?.values?.description ?? '').trim());
     s.saved = true;
+  }
+
+  edit(s: Suggestion) {
+    this.editor.open(s.layout, { ...this.options });
+    this.nav.navigateForward('/tabs/track/edit');
+  }
+
+  openSaved(s: SavedLayout) {
+    this.editor.open(s.layout, s.options, { id: s.id, name: s.name, description: s.description });
+    this.nav.navigateForward('/tabs/track/edit');
+  }
+
+  missingCount(s: SavedLayout): number {
+    return buildPartsList(s.layout, null, this.inventory.counts, this.lang).missingTotal;
+  }
+
+  private refreshPower() {
+    for (const s of this.suggestions) {
+      s.power = planPower(s.layout.pieces, this.options.feedSource, this.options.feedSpacing);
+    }
   }
 
   remove(id: string) {
@@ -174,7 +236,7 @@ export class TrackPage implements OnDestroy {
   private missingParts(layout: Layout): MissingPart[] {
     const list: MissingPart[] = [];
     for (const [id, n] of Object.entries(layout.partCounts)) {
-      const have = this.inventory.counts[id] ?? 0;
+      const have = id === 'connection-straight' ? Math.max(1, this.inventory.counts[id] ?? 0) : (this.inventory.counts[id] ?? 0);
       if (n > have) {
         const part = PARTS.find(p => p.id === id)!;
         list.push({ name: partName(part, this.lang), articleNo: part.articleNo, count: n - have });

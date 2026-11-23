@@ -234,3 +234,24 @@ ion-segment.small {
   width: 72px;
   margin-inline-end: 12px;
 }
+
+.card-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.wrap {
+  white-space: normal;
+}
+
+ion-label .desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+ion-label .miss {
+  color: var(--ion-color-danger);
+}

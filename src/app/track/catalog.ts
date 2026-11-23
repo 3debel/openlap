@@ -46,7 +46,7 @@ export type Geometry =
   | { kind: 'unknown' };
 
 /** Besonderheit, die die Vorschau zusätzlich zeichnet */
-export type PartFeature = 'banked' | 'switch' | 'crossover' | 'narrow' | 'bridge' | 'pit' | 'sensor';
+export type PartFeature = 'banked' | 'switch' | 'crossover' | 'narrow' | 'bridge' | 'pit' | 'sensor' | 'controlunit' | 'adapter';
 
 export interface Part {
   /** Carrera-Artikelnummer (8-stellig) oder eigene Kennung */
@@ -81,9 +81,9 @@ export const PARTS: Part[] = [
     category: 'straight', series: BOTH, geometry: { kind: 'straight', length: STRAIGHT / 3 }, packSize: 2, measured: false },
   { id: '20020612', articleNo: '20020612', name: { de: '1/4 Gerade', en: '1/4 straight' },
     category: 'straight', series: BOTH, geometry: { kind: 'straight', length: STRAIGHT / 4 }, packSize: 2, measured: false },
-  { id: 'connection-straight', articleNo: null, name: { de: 'Anschlussgerade', en: 'Connection straight' },
-    category: 'straight', series: BOTH, geometry: { kind: 'straight', length: STRAIGHT }, measured: false,
-    note: { de: 'Aus der Grundpackung, für Netzteil bzw. Control Unit', en: 'From the starter set, for power supply or Control Unit' } },
+  { id: 'connection-straight', articleNo: '20030352', name: { de: 'Anschlussschiene mit Control Unit', en: 'Connection track with Control Unit' },
+    category: 'straight', series: DIGITAL, geometry: { kind: 'straight', length: STRAIGHT }, feature: 'controlunit', measured: false,
+    note: { de: 'Start/Ziel – wird in jeder Strecke automatisch gesetzt', en: 'Start/finish – placed automatically in every track' } },
 
   // ---- Kurven ----
   { id: '20020571', articleNo: '20020571', name: { de: 'Kurve 1/60°', en: 'Curve 1/60°' },
@@ -136,6 +136,9 @@ export const PARTS: Part[] = [
     category: 'pit', series: DIGITAL, geometry: { kind: 'unknown' }, feature: 'pit', measured: false },
   { id: '20030341', articleNo: '20030341', name: { de: 'Einspurgerade für Pit-Stop-Verlängerung', en: 'Single-lane straight for pit stop extension' },
     category: 'pit', series: DIGITAL, geometry: { kind: 'unknown' }, feature: 'pit', measured: false },
+  { id: '20030360', articleNo: '20030360', name: { de: 'Adapter Unit (für Ladeschalen & Zubehör)', en: 'Adapter Unit (for charging cradles & accessories)' },
+    category: 'pit', series: DIGITAL, geometry: { kind: 'straight', length: STRAIGHT }, feature: 'adapter', measured: false,
+    note: { de: 'Standardgerade mit je 2 Anschlüssen pro Seite', en: 'Standard straight with 2 sockets per side' } },
   { id: '20030371', articleNo: '20030371', name: { de: 'Check Lane (Sektorzeit)', en: 'Check lane (sector timing)' },
     category: 'pit', series: DIGITAL, geometry: { kind: 'straight', length: STRAIGHT }, feature: 'sensor', measured: false },
   { id: '20030370', articleNo: '20030370', name: { de: 'Multistart Lane', en: 'Multistart lane' },
@@ -176,4 +179,23 @@ export function geometryLabel(geometry: Geometry): string | undefined {
     default:
       return undefined;
   }
+}
+
+/** Zubehör ohne Schienengeometrie – erscheint in Teileliste und Plänen. */
+export interface Accessory {
+  id: string;
+  articleNo: string;
+  name: { de: string; en: string };
+}
+
+export const ACCESSORIES: Record<string, Accessory> = {
+  controlUnit: { id: 'controlUnit', articleNo: '20030352', name: { de: 'Control Unit', en: 'Control Unit' } },
+  charger: { id: 'charger', articleNo: '20010114', name: { de: 'WIRELESS+ Ladeschale', en: 'WIRELESS+ charging cradle' } },
+  feed5: { id: 'feed5', articleNo: '20020584', name: { de: 'Zusatzeinspeisung 5 m', en: 'Additional power supply 5 m' } },
+  feed10: { id: 'feed10', articleNo: '20020585', name: { de: 'Zusatzeinspeisung 10 m', en: 'Additional power supply 10 m' } },
+  transformer: { id: 'transformer', articleNo: '20030326', name: { de: 'Transformator Digital 132 (14,8 V, 51,8 VA)', en: 'Transformer Digital 132 (14.8 V, 51.8 VA)' } },
+};
+
+export function accessoryName(a: Accessory, lang: string): string {
+  return lang?.startsWith('de') ? a.name.de : a.name.en;
 }

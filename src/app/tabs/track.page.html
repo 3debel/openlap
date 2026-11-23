@@ -73,11 +73,52 @@
     </ion-item>
 
     <ion-item>
+      <ion-label>
+        <h3>{{'Charging cradles' | translate}}</h3>
+        <p>{{'WIRELESS+, 2 per Adapter Unit next to start/finish' | translate}}</p>
+      </ion-label>
+      <div slot="end" class="stepper">
+        <button type="button" class="step" (click)="changeChargers(-1)" [disabled]="!options.chargingStations"
+                [attr.aria-label]="'Fewer' | translate"><ion-icon name="remove"></ion-icon></button>
+        <span class="count">{{options.chargingStations || 0}}</span>
+        <button type="button" class="step" (click)="changeChargers(1)" [disabled]="options.chargingStations >= 6"
+                [attr.aria-label]="'More' | translate"><ion-icon name="add"></ion-icon></button>
+      </div>
+    </ion-item>
+
+    <ion-item>
       <ion-toggle [(ngModel)]="options.ownPartsOnly" (ionChange)="persist()">
         <span class="toggle-label">{{'Only use my parts' | translate}}</span>
       </ion-toggle>
     </ion-item>
   </ion-list>
+  <p class="footnote">{{'Start/finish is always the connection track with the Control Unit.' | translate}}</p>
+
+  <div class="section-label">{{'Power supply' | translate}}</div>
+  <ion-list [inset]="true">
+    <ion-item>
+      <ion-label>
+        <h3>{{'Source for additional supply' | translate}}</h3>
+        <p class="wrap">{{('feed_source_hint_' + options.feedSource) | translate}}</p>
+      </ion-label>
+    </ion-item>
+    <ion-item>
+      <div class="full">
+        <ion-segment [value]="options.feedSource" (ionChange)="setFeedSource($any($event.detail.value))">
+          <ion-segment-button value="internal"><ion-label>{{'Internal' | translate}}</ion-label></ion-segment-button>
+          <ion-segment-button value="external"><ion-label>{{'External' | translate}}</ion-label></ion-segment-button>
+        </ion-segment>
+      </div>
+    </ion-item>
+    <ion-item>
+      <ion-label><h3>{{'Feed every' | translate}}</h3></ion-label>
+      <ion-segment slot="end" class="small" [value]="'' + options.feedSpacing" (ionChange)="setFeedSpacing($any(+$event.detail.value))">
+        <ion-segment-button value="5000"><ion-label>5 m</ion-label></ion-segment-button>
+        <ion-segment-button value="2500"><ion-label>2,5 m</ion-label></ion-segment-button>
+      </ion-segment>
+    </ion-item>
+  </ion-list>
+
   <p class="footnote" *ngIf="!options.ownPartsOnly">{{'Any parts may be used. Missing parts are listed as a shopping list.' | translate}}</p>
   <p class="footnote" *ngIf="options.ownPartsOnly && ownedPieces === 0">
     {{'Enter your parts first under Garage → Track parts.' | translate}}
@@ -105,7 +146,7 @@
   <ng-container *ngIf="suggestions.length">
     <div class="section-label">{{'Suggestions' | translate}}</div>
     <div class="card" *ngFor="let s of suggestions; index as i">
-      <layout-view [layout]="s.layout" [label]="('Suggestion' | translate) + ' ' + (i + 1)"></layout-view>
+      <layout-view [layout]="s.layout" [power]="s.power" [label]="('Suggestion' | translate) + ' ' + (i + 1)"></layout-view>
       <div class="stats">
         <div><strong>{{meters(s.layout.length)}} m</strong><span>{{'Length' | translate}}</span></div>
         <div><strong>{{s.layout.pieces.length}}</strong><span>{{'Parts' | translate}}</span></div>
@@ -116,6 +157,8 @@
         <span class="badge" [class]="'badge ' + s.layout.difficulty">{{difficultyKey(s.layout.difficulty) | translate}}</span>
         <span *ngIf="s.layout.crossings">{{ 'n_bridges' | translate: { n: s.layout.crossings } }}</span>
         <span *ngIf="s.layout.supports">{{ 'n_supports' | translate: { n: s.layout.supports } }}</span>
+        <span>{{ 'n_feeds' | translate: { n: s.power.points.length } }}</span>
+        <span *ngIf="s.layout.chargingStations">{{ 'n_chargers' | translate: { n: s.layout.chargingStations } }}</span>
       </div>
       <div class="missing" *ngIf="s.missing.length">
         <h4>{{'Missing parts' | translate}}</h4>
@@ -125,9 +168,14 @@
           <span class="art" *ngIf="m.articleNo">{{m.articleNo}}</span>
         </div>
       </div>
-      <ion-button fill="clear" size="small" (click)="save(s)" [disabled]="s.saved">
-        {{(s.saved ? 'Saved' : 'Save track') | translate}}
-      </ion-button>
+      <div class="card-actions">
+        <ion-button fill="clear" size="small" (click)="edit(s)">
+          <ion-icon name="create-outline" slot="start"></ion-icon>{{'Edit' | translate}}
+        </ion-button>
+        <ion-button fill="clear" size="small" (click)="save(s)" [disabled]="s.saved">
+          <ion-icon name="bookmark-outline" slot="start"></ion-icon>{{(s.saved ? 'Saved' : 'Save track') | translate}}
+        </ion-button>
+      </div>
     </div>
   </ng-container>
 
@@ -136,11 +184,13 @@
     <div class="section-label">{{'Saved tracks' | translate}}</div>
     <ion-list [inset]="true">
       <ion-item-sliding *ngFor="let s of saved; trackBy: trackSaved">
-        <ion-item>
+        <ion-item button [detail]="true" (click)="openSaved(s)">
           <layout-view slot="start" class="thumb" [layout]="s.layout"></layout-view>
-          <ion-label>
-            <h3>{{meters(s.layout.length)}} m · {{difficultyKey(s.layout.difficulty) | translate}}</h3>
-            <p>{{s.options.widthCm}} × {{s.options.depthCm}} cm · {{s.layout.pieces.length}} {{'Parts' | translate}} · {{dateLabel(s.created)}}</p>
+          <ion-label class="ion-text-wrap">
+            <h3>{{s.name}}</h3>
+            <p>{{dateLabel(s.updated)}} · {{meters(s.layout.length)}} m · {{difficultyKey(s.layout.difficulty) | translate}} · {{s.layout.pieces.length}} {{'Parts' | translate}}</p>
+            <p *ngIf="s.description" class="desc">{{s.description}}</p>
+            <p *ngIf="missingCount(s) > 0" class="miss">{{ 'n_missing' | translate: { n: missingCount(s) } }}</p>
           </ion-label>
         </ion-item>
         <ion-item-options side="end">

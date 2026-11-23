@@ -3,6 +3,18 @@ import { Component } from '@angular/core';
 import { addIcons } from 'ionicons';
 import {
   add,
+  arrowBackCircleOutline,
+  arrowForwardCircleOutline,
+  arrowUndo,
+  bookmarkOutline,
+  chevronBack,
+  chevronDown,
+  chevronUp,
+  createOutline,
+  magnet,
+  repeat,
+  swapHorizontal,
+  trashOutline,
   carSport,
   checkmarkCircle,
   ellipseOutline,
@@ -32,6 +44,6 @@ import {
 })
 export class TabsPage {
   constructor() {
-    addIcons({ add, carSport, checkmarkCircle, chevronForward, ellipseOutline, flag, grid, infinite, people, remove, settings, speedometer, statsChart });
+    addIcons({ add, arrowBackCircleOutline, arrowForwardCircleOutline, arrowUndo, bookmarkOutline, chevronBack, chevronDown, chevronUp, createOutline, magnet, repeat, swapHorizontal, trashOutline, carSport, checkmarkCircle, chevronForward, ellipseOutline, flag, grid, infinite, people, remove, settings, speedometer, statsChart });
   }
 }
