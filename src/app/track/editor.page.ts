@@ -6,13 +6,14 @@ import { TranslateService } from '@ngx-translate/core';
 import { Subscription, firstValueFrom } from 'rxjs';
 
 import { CATEGORY_LABELS, CATEGORY_ORDER, PARTS, Part, PartCategory, geometryLabel, partName } from './catalog';
-import { Dir } from './geometry';
-import { CONNECTION, CloseResult, Evaluation, Layout, Move, closeByStraights, evaluateMoves, layoutFromEvaluation } from './generator';
+import { Dir, Pose } from './geometry';
+import { CONNECTION, CloseResult, Evaluation, Layout, Move, closeByStraights, evaluateMoves, layoutFromEvaluation, reverseMoves } from './generator';
 import { Draft, EditorService } from './editor.service';
 import { InventoryService } from './inventory.service';
 import { LayoutsService } from './layouts.service';
 import { PartsList, buildPartsList } from './parts-list';
-import { FeedPoint, FeedSource, JointCondition, PowerPlan, planPower } from './power';
+import { FeedPoint, FeedSource, JointCondition, PowerPlan, MAX_CARS, MAX_DROP_SHARE, SUPPLY, TrackSystem, planPower } from './power';
+import { AppSettings } from '../app-settings';
 
 type PickerMode = 'replace' | 'insert-after' | 'insert-before';
 
@@ -45,13 +46,14 @@ export class EditorPage implements OnDestroy {
   pickerOpen = false;
   pickerMode: PickerMode = 'replace';
   pickerSections: PickerSection[] = [];
-  history: Move[][] = [];
+  history: { moves: Move[]; start: Pose }[] = [];
   dirty = false;
   lang: string;
   openFeed: number | null = null;
 
   private inventory: Record<string, number> = {};
   private subscription = new Subscription();
+  system: TrackSystem = 'digital132';
 
   constructor(
     editor: EditorService,
@@ -60,9 +62,11 @@ export class EditorPage implements OnDestroy {
     private alert: AlertController,
     private toast: ToastController,
     private nav: NavController,
-    private translate: TranslateService)
+    private translate: TranslateService,
+    appSettings: AppSettings)
   {
     this.draft = editor.draft;
+    this.subscription.add(appSettings.getOptions().subscribe(o => { this.system = o.system ?? 'digital132'; this.refresh(); }));
     this.lang = translate.currentLang || translate.getDefaultLang();
     this.subscription.add(translate.onLangChange.subscribe(e => { this.lang = e.lang; this.refresh(); }));
     this.subscription.add(inventoryService.inventory.subscribe(inv => { this.inventory = inv.counts; this.refresh(); }));
@@ -148,8 +152,9 @@ export class EditorPage implements OnDestroy {
   undo() {
     const prev = this.history.pop();
     if (!prev || !this.draft) return;
-    this.draft.moves = prev;
-    this.selected = Math.min(this.selected, prev.length - 1);
+    this.draft.moves = prev.moves;
+    this.draft.start = prev.start;
+    this.selected = Math.min(this.selected, prev.moves.length - 1);
     this.refresh();
   }
 
@@ -175,6 +180,18 @@ export class EditorPage implements OnDestroy {
     this.draft.options.feedSource = v;
     this.dirty = true;
     this.refresh();
+  }
+
+  /** Netzteildaten für Texte (Spannung, Leistung, Artikel, Rechenlast) */
+  get supplyParams() {
+    const sup = SUPPLY[this.system];
+    const amps = Math.min(MAX_CARS * sup.ampsPerCar, sup.va / sup.volts);
+    const f = (v: number, d = 1) => v.toLocaleString(this.lang === 'de' ? 'de-DE' : 'en-GB', { maximumFractionDigits: d });
+    return {
+      v: f(sup.volts), va: f(sup.va), art: this.system === 'digital124' ? '20020768' : '30326',
+      sys: this.system === 'digital124' ? 'Digital 124' : 'Digital 132',
+      cars: MAX_CARS, amps: f(amps), limit: f(sup.volts * MAX_DROP_SHARE, 2),
+    };
   }
 
   volts(v: number) {
@@ -270,13 +287,31 @@ export class EditorPage implements OnDestroy {
 
   private change(fn: (moves: Move[]) => void) {
     if (!this.draft) return;
-    this.history.push(this.draft.moves.map(m => ({ ...m })));
-    if (this.history.length > 50) this.history.shift();
+    this.remember();
     const next = this.draft.moves.map(m => ({ ...m }));
     fn(next);
     this.draft.moves = next;
     this.dirty = true;
     this.refresh();
+  }
+
+  private remember() {
+    if (!this.draft) return;
+    this.history.push({ moves: this.draft.moves.map(m => ({ ...m })), start: { ...this.draft.start } });
+    if (this.history.length > 50) this.history.shift();
+  }
+
+  /** Gleiche Strecke in der anderen Richtung befahren; Control Unit bleibt Start/Ziel. */
+  async reverseDirection() {
+    if (!this.draft || !this.evaluation?.closed) return;
+    this.remember();
+    const r = reverseMoves(this.draft.moves, this.draft.start);
+    this.draft.moves = r.moves;
+    this.draft.start = r.start;
+    this.selected = 0;
+    this.dirty = true;
+    this.refresh();
+    await this.showToast(this.evaluation.direction === 'cw' ? 'reversed_cw' : 'reversed_ccw');
   }
 
   private refresh() {
@@ -286,7 +321,7 @@ export class EditorPage implements OnDestroy {
     const e = evaluateMoves(d.moves, d.start, w, h, d.options.chargingStations);
     this.evaluation = e;
     this.layout = layoutFromEvaluation(e, w, h, d.options.chargingStations);
-    this.power = e.closed ? planPower(e.pieces, d.options.feedSource, d.options.joints) : null;
+    this.power = e.closed ? planPower(e.pieces, d.options.feedSource, d.options.joints, this.system) : null;
     this.partsList = buildPartsList(this.layout, this.power, this.inventory, this.lang);
     this.problems = [...new Set(e.conflicts.filter(c => c.kind === 'overlap' && c.a >= 0).flatMap(c => [c.a, c.b]))];
   }

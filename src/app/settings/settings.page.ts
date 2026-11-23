@@ -40,6 +40,10 @@ export class SettingsPage implements OnDestroy, OnInit {
     });
   }
 
+  updateSystem() {
+    return this.settings.setOptions(this.options);
+  }
+
   async updateLanguage() {
     if (this.options.language) {
       let voices = await this.speech.getVoices(this.options.language);

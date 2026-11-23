@@ -233,3 +233,6 @@ ion-title {
   .footnote { margin: 8px 0 0; }
   .feed-hint { margin: 8px 0 0; color: #ffd60a; font-size: 15px; font-weight: 600; }
 }
+
+.chip.info { background: #2c2c2e; color: #fff; }
+.chip .ccw { transform: scaleX(-1); }

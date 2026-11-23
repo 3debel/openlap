@@ -194,6 +194,7 @@ export const ACCESSORIES: Record<string, Accessory> = {
   feed5: { id: 'feed5', articleNo: '20020584', name: { de: 'Zusatzeinspeisung 5 m', en: 'Additional power supply 5 m' } },
   feed10: { id: 'feed10', articleNo: '20020585', name: { de: 'Zusatzeinspeisung 10 m', en: 'Additional power supply 10 m' } },
   transformer: { id: 'transformer', articleNo: '20030326', name: { de: 'Transformator Digital 132 (14,8 V, 51,8 VA)', en: 'Transformer Digital 132 (14.8 V, 51.8 VA)' } },
+  transformer124: { id: 'transformer124', articleNo: '20020768', name: { de: 'Transformator Digital 124 (18 V, 54 VA)', en: 'Transformer Digital 124 (18 V, 54 VA)' } },
 };
 
 export function accessoryName(a: Accessory, lang: string): string {

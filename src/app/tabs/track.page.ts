@@ -7,8 +7,9 @@ import { Subscription, firstValueFrom } from 'rxjs';
 
 import {
   AutoTrackOptions, DEFAULT_OPTIONS, Difficulty, EditorService, FeedSource, JointCondition, Inventory, InventoryService,
-  Layout, LayoutsService, Levels, PARTS, PowerPlan, SavedLayout, buildPartsList, generateLayouts, partName, planPower
+  Layout, LayoutsService, Levels, PARTS, PowerPlan, SavedLayout, TravelDirection, TrackSystem, SUPPLY, MAX_CARS, MAX_DROP_SHARE, buildPartsList, generateLayouts, partName, planPower
 } from '../track';
+import { AppSettings } from '../app-settings';
 
 const LANE_CHANGE_IDS = ['20030343', '20030345', '20030347'];
 
@@ -49,6 +50,7 @@ export class TrackPage implements OnDestroy {
   readonly levelChoices: Levels[] = [1, 2, 3];
 
   private subscription = new Subscription();
+  system: TrackSystem = 'digital132';
 
   constructor(
     private inventoryService: InventoryService,
@@ -56,9 +58,15 @@ export class TrackPage implements OnDestroy {
     private editor: EditorService,
     private nav: NavController,
     private alert: AlertController,
-    private translate: TranslateService)
+    private translate: TranslateService,
+    appSettings: AppSettings)
   {
     this.lang = translate.currentLang || translate.getDefaultLang();
+    this.subscription.add(appSettings.getOptions().subscribe(o => {
+      const changed = this.system !== o.system;
+      this.system = o.system ?? 'digital132';
+      if (changed) this.refreshPower();
+    }));
     this.subscription.add(translate.onLangChange.subscribe(e => this.lang = e.lang));
     this.subscription.add(inventoryService.inventory.subscribe(inv => this.inventory = inv));
     this.subscription.add(layouts.layouts.subscribe(list => this.saved = list));
@@ -99,10 +107,27 @@ export class TrackPage implements OnDestroy {
     this.persist();
   }
 
+  setDirection(value: TravelDirection | 'auto') {
+    this.options.direction = value;
+    this.persist();
+  }
+
   setFeedSource(value: FeedSource) {
     this.options.feedSource = value;
     this.refreshPower();
     this.persist();
+  }
+
+  /** Netzteildaten für Texte (Spannung, Leistung, Artikel, Rechenlast) */
+  get supplyParams() {
+    const sup = SUPPLY[this.system];
+    const amps = Math.min(MAX_CARS * sup.ampsPerCar, sup.va / sup.volts);
+    const f = (v: number, d = 1) => v.toLocaleString(this.lang === 'de' ? 'de-DE' : 'en-GB', { maximumFractionDigits: d });
+    return {
+      v: f(sup.volts), va: f(sup.va), art: this.system === 'digital124' ? '20020768' : '30326',
+      sys: this.system === 'digital124' ? 'Digital 124' : 'Digital 132',
+      cars: MAX_CARS, amps: f(amps), limit: f(sup.volts * MAX_DROP_SHARE, 2),
+    };
   }
 
   volts(v: number) {
@@ -143,6 +168,7 @@ export class TrackPage implements OnDestroy {
         difficulty: this.options.difficulty,
         counts,
         chargingStations: this.options.chargingStations ?? 0,
+        direction: this.options.direction ?? 'auto',
         maxResults: 3,
         timeBudgetMs: 3000,
         seed: Date.now(),
@@ -150,7 +176,7 @@ export class TrackPage implements OnDestroy {
       this.warnings = result.warnings;
       this.suggestions = result.layouts.map(layout => ({
         layout,
-        power: planPower(layout.pieces, this.options.feedSource, this.options.joints),
+        power: planPower(layout.pieces, this.options.feedSource, this.options.joints, this.system),
         missing: this.missingParts(layout),
         saved: false,
       }));
@@ -198,7 +224,7 @@ export class TrackPage implements OnDestroy {
 
   private refreshPower() {
     for (const s of this.suggestions) {
-      s.power = planPower(s.layout.pieces, this.options.feedSource, this.options.joints);
+      s.power = planPower(s.layout.pieces, this.options.feedSource, this.options.joints, this.system);
     }
   }
 

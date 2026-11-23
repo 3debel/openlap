@@ -43,6 +43,22 @@
 
     <ion-item>
       <ion-label>
+        <h3>{{'Direction of travel' | translate}}</h3>
+        <p class="wrap">{{'direction_hint_' + options.direction | translate}}</p>
+      </ion-label>
+    </ion-item>
+    <ion-item>
+      <div class="full">
+        <ion-segment [value]="options.direction" (ionChange)="setDirection($any($event.detail.value))">
+          <ion-segment-button value="ccw"><ion-label>{{'Anticlockwise' | translate}}</ion-label></ion-segment-button>
+          <ion-segment-button value="cw"><ion-label>{{'Clockwise' | translate}}</ion-label></ion-segment-button>
+          <ion-segment-button value="auto"><ion-label>{{'Auto' | translate}}</ion-label></ion-segment-button>
+        </ion-segment>
+      </div>
+    </ion-item>
+
+    <ion-item>
+      <ion-label>
         <h3>{{'Lane changes (min.)' | translate}}</h3>
         <p *ngIf="availableLaneChanges > 0 && options.ownPartsOnly">{{ 'lane_changes_available' | translate: { n: availableLaneChanges } }}</p>
         <p *ngIf="availableLaneChanges === 0">{{'Lane changes need Digital 132 switches' | translate}}</p>
@@ -99,7 +115,7 @@
     <ion-item>
       <ion-label>
         <h3>{{'Source for additional supply' | translate}}</h3>
-        <p class="wrap">{{('feed_source_hint_' + options.feedSource) | translate}}</p>
+        <p class="wrap">{{('feed_source_hint_' + options.feedSource) | translate: supplyParams}}</p>
       </ion-label>
     </ion-item>
     <ion-item>
@@ -146,7 +162,7 @@
   <ng-container *ngIf="suggestions.length">
     <div class="section-label">{{'Suggestions' | translate}}</div>
     <div class="card" *ngFor="let s of suggestions; index as i">
-      <layout-view [layout]="s.layout" [power]="s.power" [label]="('Suggestion' | translate) + ' ' + (i + 1)"></layout-view>
+      <layout-view [layout]="s.layout" [power]="s.power" [arrowLabel]="'direction_arrow' | translate" [label]="('Suggestion' | translate) + ' ' + (i + 1)"></layout-view>
       <div class="stats">
         <div><strong>{{meters(s.layout.length)}} m</strong><span>{{'Length' | translate}}</span></div>
         <div><strong>{{s.layout.pieces.length}}</strong><span>{{'Parts' | translate}}</span></div>
@@ -155,6 +171,7 @@
       </div>
       <div class="meta">
         <span class="badge" [class]="'badge ' + s.layout.difficulty">{{difficultyKey(s.layout.difficulty) | translate}}</span>
+        <span *ngIf="s.layout.direction">{{ (s.layout.direction === 'cw' ? 'Clockwise' : 'Anticlockwise') | translate }}</span>
         <span *ngIf="s.layout.crossings">{{ 'n_bridges' | translate: { n: s.layout.crossings } }}</span>
         <span *ngIf="s.layout.supports">{{ 'n_supports' | translate: { n: s.layout.supports } }}</span>
         <span *ngIf="s.power.points.length">{{ 'n_feeds' | translate: { n: s.power.points.length } }}</span>

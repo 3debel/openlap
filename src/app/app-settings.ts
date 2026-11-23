@@ -83,6 +83,8 @@ export class Options {
   voice = '';
   rate = 1000;
   pitch = 1000;
+  /** Bahnsystem: bestimmt Netzteil (Spannung, Leistung) für den Stromplan */
+  system: 'digital132' | 'digital124' = 'digital132';
 }
 
 export interface Notification {

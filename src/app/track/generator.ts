@@ -34,10 +34,15 @@ export interface GeneratorOptions {
   counts: Record<string, number>;
   /** Anzahl WIRELESS+ Ladeschalen (je 2 an einer Adapter Unit) */
   chargingStations?: number;
+  /** Fahrtrichtung: rechtsherum (Uhrzeigersinn), linksherum oder beliebig */
+  direction?: TravelDirection | 'auto';
   maxResults?: number;
   timeBudgetMs?: number;
   seed?: number;
 }
+
+/** 'cw' = rechtsherum (im Uhrzeigersinn), 'ccw' = linksherum */
+export type TravelDirection = 'cw' | 'ccw';
 
 /** Stellfläche neben der Bahn (Control Unit, Ladeschale), Maße in mm */
 export interface AccessoryBox {
@@ -80,6 +85,8 @@ export interface Layout {
   partCounts: Record<string, number>;
   chargingStations: number;
   accessories: AccessoryBox[];
+  /** Fahrtrichtung ab Start/Ziel */
+  direction?: TravelDirection;
 }
 
 export interface GeneratorResult {
@@ -183,6 +190,8 @@ const ASSUMED = [CONNECTION, ADAPTER];
  * Tiefe 15 cm geschätzt – bitte nachmessen.
  */
 export const CU_SIZE = { along: 345, across: 150 };
+/** Seite der Control Unit in Fahrtrichtung: −1 = links (Original-Aufbau) */
+export const CU_SIDE: -1 = -1;
 const CHARGER_SIZE = { along: 110, across: 140 };
 const ACCESSORY_GAP = 50;
 
@@ -682,7 +691,7 @@ function attempt(ctx: Context, seen: Set<string>): Layout | null {
   // Gesamtdrehung: einfache Runde, Acht (Brücke) oder Doppelschleife
   let lobes: number[];
   const r = rand();
-  const sign = rand() < 0.5 ? 1 : -1;
+  const sign = opts.direction === 'cw' ? 1 : opts.direction === 'ccw' ? -1 : rand() < 0.5 ? 1 : -1;
   if (opts.levels === 1) lobes = [360 * sign];
   else if (opts.levels === 2) lobes = r < 0.65 ? [360 * sign, -360 * sign] : [360 * sign];
   else lobes = r < 0.4 ? [360 * sign, -360 * sign] : r < 0.75 ? [360 * sign, 360 * sign] : [360 * sign, -360 * sign, 360 * sign];
@@ -868,6 +877,8 @@ function finalize(ctx: Context, moves: Move[]): Layout | null {
   }));
   const supports = heights.joints.filter(h => h > 0.05).length;
   const score = scoreDifficulty(moves, analysis.crossings.length);
+  const direction = travelDirection(pieces);
+  if (opts.direction && opts.direction !== 'auto' && direction !== opts.direction) return null;
   const accessories = placeAccessories(pieces, opts.chargingStations ?? 0, opts.areaWidth, opts.areaDepth);
   if (!accessories) return null;
 
@@ -885,6 +896,7 @@ function finalize(ctx: Context, moves: Move[]): Layout | null {
     partCounts: counts,
     chargingStations: opts.chargingStations ?? 0,
     accessories,
+    direction,
   };
 }
 
@@ -923,9 +935,10 @@ export function placeAccessories(pieces: PlacedPiece[], chargingStations: number
     left -= n;
   }
 
-  const boxesFor = (side: 1 | -1): AccessoryBox[] | null => {
+  const boxesFor = (cuSide: 1 | -1, chargerSide: 1 | -1): AccessoryBox[] | null => {
     const boxes: AccessoryBox[] = [];
     for (const w of wanted) {
+      const side = w.kind === 'controlunit' ? cuSide : chargerSide;
       const p = pieces[w.piece];
       const t = (p.start.heading * Math.PI) / 180;
       const ux = Math.cos(t), uy = Math.sin(t);
@@ -954,11 +967,13 @@ export function placeAccessories(pieces: PlacedPiece[], chargingStations: number
     return boxes;
   };
 
-  // Außenseite = vom Schwerpunkt der Strecke weg
+  // Control Unit: fest links in Fahrtrichtung (Carrera: Autos fahren von rechts
+  // nach links an der Control Unit vorbei). Rechtsherum steht sie damit außen,
+  // linksherum innen. Ladeschalen bevorzugt außen (vom Schwerpunkt weg).
   const p0 = pieces[0];
   const t0 = (p0.start.heading * Math.PI) / 180;
   const outward: 1 | -1 = ((-Math.sin(t0)) * (p0.start.x - cx) + Math.cos(t0) * (p0.start.y - cy)) >= 0 ? 1 : -1;
-  return boxesFor(outward) ?? boxesFor(outward === 1 ? -1 : 1);
+  return boxesFor(CU_SIDE, outward) ?? boxesFor(CU_SIDE, outward === 1 ? -1 : 1);
 }
 
 function countMoves(moves: Move[]): Record<string, number> {
@@ -1069,6 +1084,40 @@ export interface Evaluation {
   difficulty: Difficulty;
   accessories: AccessoryBox[];
   accessoriesFit: boolean;
+  direction: TravelDirection;
+}
+
+/**
+ * Fahrtrichtung, gemessen an der Startgeraden: Liegt die Außenseite der
+ * Strecke (vom Schwerpunkt weg) links in Fahrtrichtung, fährt man rechtsherum
+ * (im Uhrzeigersinn) – die Control Unit (links) steht dann außen.
+ * Funktioniert auch für Achten, bei denen die Kurvensumme 0 ist.
+ */
+export function travelDirection(pieces: PlacedPiece[]): TravelDirection {
+  if (!pieces.length) return 'cw';
+  const cx = pieces.reduce((a, p) => a + p.start.x, 0) / pieces.length;
+  const cy = pieces.reduce((a, p) => a + p.start.y, 0) / pieces.length;
+  const p0 = pieces[0];
+  const t = (p0.start.heading * Math.PI) / 180;
+  const mx = p0.start.x + Math.cos(t) * p0.length / 2, my = p0.start.y + Math.sin(t) * p0.length / 2;
+  // > 0: Schwerpunkt liegt rechts → Außenseite links → rechtsherum
+  const right = -Math.sin(t) * (cx - mx) + Math.cos(t) * (cy - my);
+  return right >= 0 ? 'cw' : 'ccw';
+}
+
+/**
+ * Fahrtrichtung umkehren: gleiche Strecke, rückwärts befahren. Die
+ * Anschlussschiene bleibt Teil 1, die übrigen Teile in umgekehrter Reihenfolge
+ * mit gespiegelter Kurvenrichtung.
+ */
+export function reverseMoves(moves: Move[], start: Pose): { moves: Move[]; start: Pose } {
+  if (!moves.length) return { moves, start };
+  const end = place(start, geometryOf(moves[0].partId), moves[0].dir);
+  const rest = moves.slice(1).reverse().map(m => ({ partId: m.partId, dir: (m.dir === 0 ? 0 : -m.dir) as Dir }));
+  return {
+    moves: [{ ...moves[0] }, ...rest],
+    start: { x: end.x, y: end.y, heading: normalizeHeading(end.heading + 180) },
+  };
 }
 
 function signedHeading(d: number) {
@@ -1161,6 +1210,7 @@ export function evaluateMoves(moves: Move[], start: Pose, areaW: number, areaD: 
     difficulty: classify(score),
     accessories: accessories ?? [],
     accessoriesFit: accessories !== null,
+    direction: travelDirection(placed),
   };
 }
 
@@ -1180,6 +1230,7 @@ export function layoutFromEvaluation(e: Evaluation, areaW: number, areaD: number
     partCounts: e.partCounts,
     chargingStations,
     accessories: e.accessories,
+    direction: e.direction,
   };
 }
 

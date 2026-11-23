@@ -67,6 +67,7 @@ function levelColor(h: number): string {
         <path *ngIf="s.mark" class="mark" [attr.d]="s.mark"></path>
       </g>
       <path class="start" [attr.d]="startLine"></path>
+      <path class="dir" [attr.d]="arrow"><title>{{arrowLabel}}</title></path>
       <ng-container *ngIf="power?.origin as o">
         <g *ngFor="let p of power!.points" class="feed">
           <line [attr.x1]="o.x" [attr.y1]="o.y" [attr.x2]="p.x" [attr.y2]="p.y"></line>
@@ -84,6 +85,7 @@ function levelColor(h: number): string {
     .lane { fill: none; stroke: rgba(255,255,255,0.55); stroke-width: 6; stroke-linecap: round; pointer-events: none; }
     .mark { fill: none; stroke: #64d2ff; stroke-width: 16; stroke-linecap: round; pointer-events: none; }
     .start { stroke: #fff; stroke-width: 22; stroke-dasharray: 22 22; pointer-events: none; }
+    .dir { fill: #ffd60a; stroke: #000; stroke-width: 6; stroke-linejoin: round; pointer-events: none; }
     .selectable g { cursor: pointer; }
     .sel .body { stroke: #ffd60a; stroke-width: 22; }
     .problem .body { stroke: #ff453a; stroke-width: 16; }
@@ -110,6 +112,9 @@ export class LayoutViewComponent implements OnChanges {
   boxes: Box[] = [];
   viewBox = '0 0 100 100';
   startLine = '';
+  /** Pfeil in Fahrtrichtung auf der Anschlussschiene */
+  arrow = '';
+  @Input() arrowLabel = '';
 
   ngOnChanges() {
     if (!this.layout || !this.layout.pieces.length) return;
@@ -125,6 +130,12 @@ export class LayoutViewComponent implements OnChanges {
     const nx = -Math.sin(t) * (TRACK_WIDTH / 2), ny = Math.cos(t) * (TRACK_WIDTH / 2);
     const x = first.start.x + Math.cos(t) * 60, y = first.start.y + Math.sin(t) * 60;
     this.startLine = `M${(x + nx).toFixed(1)},${(y + ny).toFixed(1)} L${(x - nx).toFixed(1)},${(y - ny).toFixed(1)}`;
+    // Pfeil: Schaft und Spitze in der Fahrbahnmitte, hinter der Startlinie
+    const ux = Math.cos(t), uy = Math.sin(t), vx = -Math.sin(t), vy = Math.cos(t);
+    const at = (a: number, c: number) => `${(first.start.x + ux * a + vx * c).toFixed(1)},${(first.start.y + uy * a + vy * c).toFixed(1)}`;
+    const len = Math.min(first.length, 345);
+    const a0 = 110, a1 = len - 40, head = 70;
+    this.arrow = `M${at(a0, -14)} L${at(a1 - head, -14)} L${at(a1 - head, -38)} L${at(a1, 0)} L${at(a1 - head, 38)} L${at(a1 - head, 14)} L${at(a0, 14)} Z`;
   }
 
   tap(index: number) {

@@ -24,6 +24,10 @@
       <ion-icon name="warning-sharp"></ion-icon>
       {{ 'gap_status' | translate: { mm: evaluation.gap, deg: evaluation.headingGap } }}
     </span>
+    <span class="chip info" *ngIf="evaluation.closed">
+      <ion-icon name="refresh" [class.ccw]="evaluation.direction === 'ccw'"></ion-icon>
+      {{ (evaluation.direction === 'cw' ? 'Clockwise' : 'Anticlockwise') | translate }}
+    </span>
     <span class="chip bad" *ngIf="evaluation.outside">{{'Outside the floor area' | translate}}</span>
     <ng-container *ngIf="evaluation.closed">
       <span class="chip bad" *ngIf="problems.length">{{'Pieces overlap' | translate}}</span>
@@ -33,7 +37,7 @@
 
   <!-- ===== Draufsicht ===== -->
   <div class="map">
-    <layout-view [layout]="layout" [power]="power" [selectable]="true" [selected]="selected" [problems]="evaluation.closed ? problems : []"
+    <layout-view [layout]="layout" [power]="power" [arrowLabel]="'direction_arrow' | translate" [selectable]="true" [selected]="selected" [problems]="evaluation.closed ? problems : []"
                  (pieceTap)="select($event)" [label]="'Track' | translate"></layout-view>
     <div class="facts">
       <span><strong>{{meters(evaluation.length)}} m</strong></span>
@@ -86,6 +90,13 @@
     <p class="footnote">{{'Adjusts two straight sections so the track closes. Missing rotation must be fixed with curves.' | translate}}</p>
   </div>
 
+  <div class="actions" *ngIf="evaluation.closed">
+    <ion-button expand="block" fill="outline" (click)="reverseDirection()">
+      <ion-icon name="repeat" slot="start"></ion-icon>{{'Reverse direction' | translate}}
+    </ion-button>
+    <p class="footnote">{{'reverse_hint' | translate}}</p>
+  </div>
+
   <!-- ===== Name & Beschreibung ===== -->
   <div class="section-label">{{'Details' | translate}}</div>
   <ion-list [inset]="true">
@@ -116,7 +127,7 @@
     </ion-item>
     <ion-item>
       <ion-label class="ion-text-wrap">
-        <p>{{('feed_source_hint_' + draft.options.feedSource) | translate}}</p>
+        <p>{{('feed_source_hint_' + draft.options.feedSource) | translate: supplyParams}}</p>
       </ion-label>
     </ion-item>
     <ion-item>
@@ -130,19 +141,19 @@
 
   <div class="notice warn" *ngIf="draft.options.feedSource === 'external'">
     <ion-icon name="warning-sharp"></ion-icon>
-    <span>{{'power_note_external' | translate}}</span>
+    <span>{{'power_note_external' | translate: supplyParams}}</span>
   </div>
 
   <ng-container *ngIf="power; else noPower">
     <div class="drops">
       <div><strong>{{volts(power.dropWithout)}} V</strong><span>{{'Drop without feed' | translate}}</span></div>
-      <div><strong [class.ok]="power.dropWith <= 0.7">{{volts(power.dropWith)}} V</strong><span>{{'Drop with plan' | translate}}</span></div>
-      <div><strong>0,7 V</strong><span>{{'Limit' | translate}}</span></div>
+      <div><strong [class.ok]="power.dropWith <= power.maxDrop">{{volts(power.dropWith)}} V</strong><span>{{'Drop with plan' | translate}}</span></div>
+      <div><strong>{{volts(power.maxDrop)}} V</strong><span>{{'Limit' | translate}}</span></div>
     </div>
-    <p class="footnote">{{'drop_explain' | translate}}</p>
+    <p class="footnote">{{'drop_explain' | translate: supplyParams}}</p>
     <div class="notice" *ngFor="let n of power.notes">
       <ion-icon name="information-circle-sharp"></ion-icon>
-      <span>{{n | translate}}</span>
+      <span>{{n | translate: supplyParams}}</span>
     </div>
     <div class="section-label">{{'Control Unit connections' | translate}}</div>
     <div class="cu-card">

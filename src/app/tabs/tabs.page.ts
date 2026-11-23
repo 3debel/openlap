@@ -6,6 +6,7 @@ import {
   arrowBackCircleOutline,
   arrowForwardCircleOutline,
   arrowUndo,
+  refresh,
   bookmarkOutline,
   chevronBack,
   chevronDown,
@@ -44,6 +45,6 @@ import {
 })
 export class TabsPage {
   constructor() {
-    addIcons({ add, arrowBackCircleOutline, arrowForwardCircleOutline, arrowUndo, bookmarkOutline, chevronBack, chevronDown, chevronUp, createOutline, magnet, repeat, swapHorizontal, trashOutline, carSport, checkmarkCircle, chevronForward, ellipseOutline, flag, grid, infinite, people, remove, settings, speedometer, statsChart });
+    addIcons({ add, arrowBackCircleOutline, arrowForwardCircleOutline, arrowUndo, bookmarkOutline, chevronBack, chevronDown, chevronUp, createOutline, magnet, refresh, repeat, swapHorizontal, trashOutline, carSport, checkmarkCircle, chevronForward, ellipseOutline, flag, grid, infinite, people, remove, settings, speedometer, statsChart });
   }
 }

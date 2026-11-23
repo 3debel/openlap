@@ -45,7 +45,7 @@ export function buildPartsList(layout: Layout, power: PowerPlan | null, inventor
       }
     }
     if (power.source === 'internal') {
-      const a = ACCESSORIES['transformer'];
+      const a = ACCESSORIES[power.system === 'digital124' ? 'transformer124' : 'transformer'];
       accessories.push({ name: accessoryName(a, lang), articleNo: a.articleNo, count: 1, owned: null, missing: 0 });
     }
   }

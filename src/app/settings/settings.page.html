@@ -28,6 +28,15 @@
         <ion-select-option value="sk">Slovak</ion-select-option>
       </ion-select>
     </ion-item>
+    <ion-item>
+      <ion-select label="{{'Track system' | translate}}" [(ngModel)]="options.system" (ionChange)="updateSystem()" cancelText="{{'Cancel' | translate}}" okText="{{'OK' | translate}}">
+        <ion-select-option value="digital132">Digital 132 (14,8 V · 51,8 VA)</ion-select-option>
+        <ion-select-option value="digital124">Digital 124 (18 V · 54 VA)</ion-select-option>
+      </ion-select>
+    </ion-item>
+    <ion-item lines="none">
+      <ion-label class="ion-text-wrap"><p>{{'system_hint' | translate}}</p></ion-label>
+    </ion-item>
     <ion-item routerLink="/settings/voice">
       <ion-label>{{'Voice' | translate}}</ion-label>
     </ion-item>
