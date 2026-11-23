@@ -12,7 +12,7 @@ import { Draft, EditorService } from './editor.service';
 import { InventoryService } from './inventory.service';
 import { LayoutsService } from './layouts.service';
 import { PartsList, buildPartsList } from './parts-list';
-import { FeedPoint, FeedSource, JointCondition, PowerPlan, MAX_CARS, MAX_DROP_SHARE, SUPPLY, TrackSystem, planPower } from './power';
+import { FeedPoint, FeedSource, JointCondition, PowerPlan, loadFor, SUPPLY, TrackSystem, planPower } from './power';
 import { AppSettings } from '../app-settings';
 
 type PickerMode = 'replace' | 'insert-after' | 'insert-before';
@@ -54,6 +54,7 @@ export class EditorPage implements OnDestroy {
   private inventory: Record<string, number> = {};
   private subscription = new Subscription();
   system: TrackSystem = 'digital132';
+  cars = 4;
 
   constructor(
     editor: EditorService,
@@ -66,7 +67,7 @@ export class EditorPage implements OnDestroy {
     appSettings: AppSettings)
   {
     this.draft = editor.draft;
-    this.subscription.add(appSettings.getOptions().subscribe(o => { this.system = o.system ?? 'digital132'; this.refresh(); }));
+    this.subscription.add(appSettings.getOptions().subscribe(o => { this.system = o.system ?? 'digital132'; this.cars = o.cars ?? 4; this.refresh(); }));
     this.lang = translate.currentLang || translate.getDefaultLang();
     this.subscription.add(translate.onLangChange.subscribe(e => { this.lang = e.lang; this.refresh(); }));
     this.subscription.add(inventoryService.inventory.subscribe(inv => { this.inventory = inv.counts; this.refresh(); }));
@@ -185,12 +186,12 @@ export class EditorPage implements OnDestroy {
   /** Netzteildaten für Texte (Spannung, Leistung, Artikel, Rechenlast) */
   get supplyParams() {
     const sup = SUPPLY[this.system];
-    const amps = Math.min(MAX_CARS * sup.ampsPerCar, sup.va / sup.volts);
+    const load = loadFor(this.system, this.cars);
     const f = (v: number, d = 1) => v.toLocaleString(this.lang === 'de' ? 'de-DE' : 'en-GB', { maximumFractionDigits: d });
     return {
       v: f(sup.volts), va: f(sup.va), art: this.system === 'digital124' ? '20020768' : '30326',
       sys: this.system === 'digital124' ? 'Digital 124' : 'Digital 132',
-      cars: MAX_CARS, amps: f(amps), limit: f(sup.volts * MAX_DROP_SHARE, 2),
+      cars: load.cars, amps: f(load.total), limit: f(load.maxDrop, 2),
     };
   }
 
@@ -280,6 +281,10 @@ export class EditorPage implements OnDestroy {
     return p.cable === 'feed10' ? '20020585 (10 m)' : p.cable === 'feed5' ? '20020584 (5 m)' : '–';
   }
 
+  get edgeKey(): string {
+    return { front: 'Front', back: 'Back', left: 'Left', right: 'Right', any: 'Front' }[this.draft?.options.cuEdge ?? 'front'];
+  }
+
   difficultyKey(): string {
     const d = this.evaluation?.difficulty ?? 'medium';
     return { easy: 'Easy', medium: 'Medium', hard: 'Hard' }[d];
@@ -307,21 +312,42 @@ export class EditorPage implements OnDestroy {
     this.remember();
     const r = reverseMoves(this.draft.moves, this.draft.start);
     this.draft.moves = r.moves;
-    this.draft.start = r.start;
+    this.draft.start = this.shiftToFit(r.moves, r.start);
     this.selected = 0;
     this.dirty = true;
     this.refresh();
     await this.showToast(this.evaluation.direction === 'cw' ? 'reversed_cw' : 'reversed_ccw');
   }
 
+  /**
+   * Strecke so wenig wie möglich verschieben, dass die Control Unit Platz hat,
+   * erreichbar ist und alles in der Grundfläche liegt (z. B. nach dem Umkehren).
+   */
+  private shiftToFit(moves: Move[], start: Pose): Pose {
+    const d = this.draft!;
+    const w = d.options.widthCm * 10, h = d.options.depthCm * 10;
+    const ok = (p: Pose) => {
+      const e = evaluateMoves(moves, p, w, h, d.options.chargingStations, d.options.cuEdge ?? 'any');
+      return e.accessoriesFit && e.cuReachable && !e.outside;
+    };
+    if (ok(start)) return start;
+    for (let dist = 25; dist <= 800; dist += 25) {
+      for (const [dx, dy] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+        const p = { ...start, x: start.x + dx * dist, y: start.y + dy * dist };
+        if (ok(p)) return p;
+      }
+    }
+    return start;
+  }
+
   private refresh() {
     const d = this.draft;
     if (!d) return;
     const w = d.options.widthCm * 10, h = d.options.depthCm * 10;
-    const e = evaluateMoves(d.moves, d.start, w, h, d.options.chargingStations);
+    const e = evaluateMoves(d.moves, d.start, w, h, d.options.chargingStations, d.options.cuEdge ?? 'any');
     this.evaluation = e;
     this.layout = layoutFromEvaluation(e, w, h, d.options.chargingStations);
-    this.power = e.closed ? planPower(e.pieces, d.options.feedSource, d.options.joints, this.system) : null;
+    this.power = e.closed ? planPower(e.pieces, d.options.feedSource, d.options.joints, this.system, this.cars) : null;
     this.partsList = buildPartsList(this.layout, this.power, this.inventory, this.lang);
     this.problems = [...new Set(e.conflicts.filter(c => c.kind === 'overlap' && c.a >= 0).flatMap(c => [c.a, c.b]))];
   }

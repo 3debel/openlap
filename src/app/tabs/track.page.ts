@@ -7,7 +7,7 @@ import { Subscription, firstValueFrom } from 'rxjs';
 
 import {
   AutoTrackOptions, DEFAULT_OPTIONS, Difficulty, EditorService, FeedSource, JointCondition, Inventory, InventoryService,
-  Layout, LayoutsService, Levels, PARTS, PowerPlan, SavedLayout, TravelDirection, TrackSystem, SUPPLY, MAX_CARS, MAX_DROP_SHARE, buildPartsList, generateLayouts, partName, planPower
+  Layout, LayoutsService, Levels, PARTS, PowerPlan, SavedLayout, TravelDirection, TrackSystem, CuEdge, SUPPLY, loadFor, buildPartsList, generateLayouts, partName, planPower
 } from '../track';
 import { AppSettings } from '../app-settings';
 
@@ -51,6 +51,7 @@ export class TrackPage implements OnDestroy {
 
   private subscription = new Subscription();
   system: TrackSystem = 'digital132';
+  cars = 4;
 
   constructor(
     private inventoryService: InventoryService,
@@ -63,8 +64,9 @@ export class TrackPage implements OnDestroy {
   {
     this.lang = translate.currentLang || translate.getDefaultLang();
     this.subscription.add(appSettings.getOptions().subscribe(o => {
-      const changed = this.system !== o.system;
+      const changed = this.system !== o.system || this.cars !== o.cars;
       this.system = o.system ?? 'digital132';
+      this.cars = o.cars ?? 4;
       if (changed) this.refreshPower();
     }));
     this.subscription.add(translate.onLangChange.subscribe(e => this.lang = e.lang));
@@ -107,6 +109,11 @@ export class TrackPage implements OnDestroy {
     this.persist();
   }
 
+  setCuEdge(value: CuEdge) {
+    this.options.cuEdge = value;
+    this.persist();
+  }
+
   setDirection(value: TravelDirection | 'auto') {
     this.options.direction = value;
     this.persist();
@@ -121,12 +128,12 @@ export class TrackPage implements OnDestroy {
   /** Netzteildaten für Texte (Spannung, Leistung, Artikel, Rechenlast) */
   get supplyParams() {
     const sup = SUPPLY[this.system];
-    const amps = Math.min(MAX_CARS * sup.ampsPerCar, sup.va / sup.volts);
+    const load = loadFor(this.system, this.cars);
     const f = (v: number, d = 1) => v.toLocaleString(this.lang === 'de' ? 'de-DE' : 'en-GB', { maximumFractionDigits: d });
     return {
       v: f(sup.volts), va: f(sup.va), art: this.system === 'digital124' ? '20020768' : '30326',
       sys: this.system === 'digital124' ? 'Digital 124' : 'Digital 132',
-      cars: MAX_CARS, amps: f(amps), limit: f(sup.volts * MAX_DROP_SHARE, 2),
+      cars: load.cars, amps: f(load.total), limit: f(load.maxDrop, 2),
     };
   }
 
@@ -169,6 +176,7 @@ export class TrackPage implements OnDestroy {
         counts,
         chargingStations: this.options.chargingStations ?? 0,
         direction: this.options.direction ?? 'auto',
+        cuEdge: this.options.cuEdge ?? 'front',
         maxResults: 3,
         timeBudgetMs: 3000,
         seed: Date.now(),
@@ -176,7 +184,7 @@ export class TrackPage implements OnDestroy {
       this.warnings = result.warnings;
       this.suggestions = result.layouts.map(layout => ({
         layout,
-        power: planPower(layout.pieces, this.options.feedSource, this.options.joints, this.system),
+        power: planPower(layout.pieces, this.options.feedSource, this.options.joints, this.system, this.cars),
         missing: this.missingParts(layout),
         saved: false,
       }));
@@ -224,7 +232,7 @@ export class TrackPage implements OnDestroy {
 
   private refreshPower() {
     for (const s of this.suggestions) {
-      s.power = planPower(s.layout.pieces, this.options.feedSource, this.options.joints, this.system);
+      s.power = planPower(s.layout.pieces, this.options.feedSource, this.options.joints, this.system, this.cars);
     }
   }
 

@@ -15,8 +15,9 @@
  *    gebraucht/oxidiert ≈ 50 mΩ (Messung lockerer Schienenverbinder: Ø 48 mΩ)
  *  - Schiene (Stahlband): ≈ 0,05 Ω/m je Leiter (Stahlschiene im Slotcar-Bereich
  *    ≈ 0,13 Ω/m bei kleinerem Querschnitt)
- *  - Last: größtmögliche Zahl gleichzeitig fahrender Autos (6 über Handregler
- *    + Pace Car + Autonomous Car = 8), je ≈ 0,6 A (D132) bzw. 0,8 A (D124),
+ *  - Last: Zahl der regelmäßig gleichzeitig fahrenden Autos aus den
+ *    Einstellungen (Standard 4, höchstens 8 = 6 Fahrer + Pace Car +
+ *    Autonomous Car), je ≈ 0,6 A (D132) bzw. 0,8 A (D124),
  *    insgesamt höchstens so viel, wie das Netzteil liefert
  *    (D132: 51,8 VA / 14,8 V = 3,5 A; D124: 54 VA / 18 V = 3,0 A).
  *    Die Autos fahren gleichmäßig verteilt; geprüft wird jede Lage des Feldes.
@@ -53,15 +54,17 @@ export const SUPPLY: Record<TrackSystem, SupplyData> = {
 };
 /** 6 Fahrer + Pace Car + Autonomous Car */
 export const MAX_CARS = 8;
+export const DEFAULT_CARS = 4;
 /** zulässiger Spannungsfall: Anteil der Netzteilspannung */
 export const MAX_DROP_SHARE = 0.05;
 /** darunter keine Empfehlung; dazwischen „optional“ */
 export const OPTIONAL_SHARE = 0.85;
 
-export function loadFor(system: TrackSystem) {
+export function loadFor(system: TrackSystem, cars = DEFAULT_CARS) {
   const sup = SUPPLY[system];
-  const total = Math.min(MAX_CARS * sup.ampsPerCar, sup.va / sup.volts);
-  return { cars: MAX_CARS, total, perCar: total / MAX_CARS, maxDrop: sup.volts * MAX_DROP_SHARE, volts: sup.volts };
+  const n = Math.max(1, Math.min(MAX_CARS, Math.round(cars)));
+  const total = Math.min(n * sup.ampsPerCar, sup.va / sup.volts);
+  return { cars: n, total, perCar: total / n, maxDrop: sup.volts * MAX_DROP_SHARE, volts: sup.volts };
 }
 
 export interface FeedPoint {
@@ -182,10 +185,10 @@ export function voltageDrops(pieces: { length: number }[], jointOhm: number, fee
   return worst;
 }
 
-export function planPower(pieces: PlacedPiece[], source: FeedSource, joints: JointCondition, system: TrackSystem = 'digital132'): PowerPlan {
+export function planPower(pieces: PlacedPiece[], source: FeedSource, joints: JointCondition, system: TrackSystem = 'digital132', cars = DEFAULT_CARS): PowerPlan {
   const total = pieces.reduce((a, p) => a + p.length, 0);
   const notes: string[] = [];
-  const load = loadFor(system);
+  const load = loadFor(system, cars);
   const MAX_DROP = load.maxDrop, OPTIONAL_DROP = load.maxDrop * OPTIONAL_SHARE;
   const drop = (f: { node: number; ohm: number }[]) => voltageDrops(seq, jointOhm, f, load.cars, load.perCar);
   const plan: PowerPlan = { need: 'none', source, joints, system, maxDrop: MAX_DROP, loadAmps: load.total, cars: load.cars, dropWithout: 0, dropWith: 0, worstAt: 0, trackLength: total, origin: null, points: [], cables: { feed5: 0, feed10: 0 }, notes };

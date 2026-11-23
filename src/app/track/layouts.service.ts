@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { SettingsService } from '../services/settings.service';
-import { Difficulty, Layout, Levels, TravelDirection } from './generator';
+import { CuEdge, Difficulty, Layout, Levels, TravelDirection } from './generator';
 import { FeedSource, JointCondition } from './power';
 
 export interface AutoTrackOptions {
@@ -18,6 +18,8 @@ export interface AutoTrackOptions {
   chargingStations: number;
   /** Fahrtrichtung: rechtsherum, linksherum oder automatisch */
   direction: TravelDirection | 'auto';
+  /** Standort der Control Unit (Seite der Grundfläche) */
+  cuEdge: CuEdge;
   /** Stromquelle der Zusatzeinspeisung */
   feedSource: FeedSource;
   /** Abstand der Einspeisungen in mm */
@@ -33,6 +35,7 @@ export const DEFAULT_OPTIONS: AutoTrackOptions = {
   ownPartsOnly: true,
   chargingStations: 0,
   direction: 'auto',
+  cuEdge: 'front',
   feedSource: 'internal',
   joints: 'new',
 };
@@ -54,6 +57,7 @@ const OPTIONS = 'autotrack-options';
 function fixOptions(o: AutoTrackOptions): AutoTrackOptions {
   if (o.joints !== 'new' && o.joints !== 'used') o.joints = 'new';
   if (!['cw', 'ccw', 'auto'].includes(o.direction)) o.direction = 'auto';
+  if (!['front', 'back', 'left', 'right', 'any'].includes(o.cuEdge)) o.cuEdge = 'front';
   delete (o as { feedSpacing?: number }).feedSpacing;
   return o;
 }

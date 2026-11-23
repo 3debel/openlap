@@ -31,6 +31,7 @@
     <span class="chip bad" *ngIf="evaluation.outside">{{'Outside the floor area' | translate}}</span>
     <ng-container *ngIf="evaluation.closed">
       <span class="chip bad" *ngIf="problems.length">{{'Pieces overlap' | translate}}</span>
+      <span class="chip bad" *ngIf="evaluation.accessoriesFit && !evaluation.cuReachable">{{ 'cu_not_reachable' | translate: { side: (edgeKey | translate) } }}</span>
       <span class="chip bad" *ngIf="!evaluation.accessoriesFit">{{'No room for Control Unit / chargers' | translate}}</span>
     </ng-container>
   </div>

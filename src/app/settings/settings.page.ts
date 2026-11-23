@@ -12,6 +12,8 @@ import { I18nAlertService, SpeechService } from '../services';
 export class SettingsPage implements OnDestroy, OnInit {
 
   options = new Options();
+  /** 6 Fahrer + Pace Car + Autonomous Car */
+  carChoices = [1, 2, 3, 4, 5, 6, 7, 8];
 
   private subscription: Subscription;
 

@@ -43,6 +43,23 @@
 
     <ion-item>
       <ion-label>
+        <h3>{{'Control Unit position' | translate}}</h3>
+        <p class="wrap">{{'cu_edge_hint' | translate}}</p>
+      </ion-label>
+    </ion-item>
+    <ion-item>
+      <div class="full">
+        <ion-segment [value]="options.cuEdge" (ionChange)="setCuEdge($any($event.detail.value))">
+          <ion-segment-button value="front"><ion-label>{{'Front' | translate}}</ion-label></ion-segment-button>
+          <ion-segment-button value="back"><ion-label>{{'Back' | translate}}</ion-label></ion-segment-button>
+          <ion-segment-button value="left"><ion-label>{{'Left' | translate}}</ion-label></ion-segment-button>
+          <ion-segment-button value="right"><ion-label>{{'Right' | translate}}</ion-label></ion-segment-button>
+        </ion-segment>
+      </div>
+    </ion-item>
+
+    <ion-item>
+      <ion-label>
         <h3>{{'Direction of travel' | translate}}</h3>
         <p class="wrap">{{'direction_hint_' + options.direction | translate}}</p>
       </ion-label>

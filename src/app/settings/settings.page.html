@@ -37,6 +37,14 @@
     <ion-item lines="none">
       <ion-label class="ion-text-wrap"><p>{{'system_hint' | translate}}</p></ion-label>
     </ion-item>
+    <ion-item>
+      <ion-select label="{{'Cars driving at the same time' | translate}}" [(ngModel)]="options.cars" (ionChange)="updateSystem()" cancelText="{{'Cancel' | translate}}" okText="{{'OK' | translate}}">
+        <ion-select-option *ngFor="let n of carChoices" [value]="n">{{n}}</ion-select-option>
+      </ion-select>
+    </ion-item>
+    <ion-item lines="none">
+      <ion-label class="ion-text-wrap"><p>{{'cars_hint' | translate}}</p></ion-label>
+    </ion-item>
     <ion-item routerLink="/settings/voice">
       <ion-label>{{'Voice' | translate}}</ion-label>
     </ion-item>

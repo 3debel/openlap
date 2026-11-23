@@ -85,6 +85,8 @@ export class Options {
   pitch = 1000;
   /** Bahnsystem: bestimmt Netzteil (Spannung, Leistung) für den Stromplan */
   system: 'digital132' | 'digital124' = 'digital132';
+  /** Autos, die regelmäßig gleichzeitig fahren (für den Stromplan) */
+  cars = 4;
 }
 
 export interface Notification {

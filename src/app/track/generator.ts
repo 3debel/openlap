@@ -36,6 +36,8 @@ export interface GeneratorOptions {
   chargingStations?: number;
   /** Fahrtrichtung: rechtsherum (Uhrzeigersinn), linksherum oder beliebig */
   direction?: TravelDirection | 'auto';
+  /** Seite der Grundfläche, an der die Control Unit erreichbar sein muss */
+  cuEdge?: CuEdge;
   maxResults?: number;
   timeBudgetMs?: number;
   seed?: number;
@@ -43,6 +45,19 @@ export interface GeneratorOptions {
 
 /** 'cw' = rechtsherum (im Uhrzeigersinn), 'ccw' = linksherum */
 export type TravelDirection = 'cw' | 'ccw';
+/** Standort der Control Unit: Seite der Grundfläche (vorne = Fahrerseite = unten im Plan) */
+export type CuEdge = 'front' | 'back' | 'left' | 'right' | 'any';
+/** Reichweite: Mitte der Control Unit höchstens so weit von der gewählten Kante (mm, Schätzwert Armlänge) */
+export const CU_REACH = 700;
+const EDGE_NORMAL: Record<Exclude<CuEdge, 'any'>, [number, number]> = { front: [0, 1], back: [0, -1], left: [-1, 0], right: [1, 0] };
+
+/** Abstand der Control-Unit-Mitte zur gewählten Kante (mm), Infinity ohne CU */
+export function cuEdgeDistance(accessories: AccessoryBox[], edge: CuEdge, areaW: number, areaD: number): number {
+  if (edge === 'any') return 0;
+  const cu = accessories.find(a => a.kind === 'controlunit');
+  if (!cu) return Infinity;
+  return { front: areaD - cu.y, back: cu.y, left: cu.x, right: areaW - cu.x }[edge];
+}
 
 /** Stellfläche neben der Bahn (Control Unit, Ladeschale), Maße in mm */
 export interface AccessoryBox {
@@ -820,6 +835,68 @@ function assemble(ctx: Context, corners: Corner[], runs: number[], total345: num
 }
 
 /** Teilefolge platzieren, prüfen und in ein Layout umwandeln. */
+/**
+ * Lage der Strecke in der Grundfläche: Drehung (0/90/180/270°) und Verschiebung.
+ * Ohne Standortwunsch mittig (ggf. um 90° gedreht). Mit Standortwunsch liegt die
+ * Startgerade parallel zur gewählten Kante, die Strecke wird an diese Kante
+ * geschoben; steht die Control Unit zwischen Bahn und Kante, bleibt Platz für sie.
+ */
+function placeInArea(box: Box, W: number, D: number, orientation: 'normal' | 'rotated', edge: CuEdge, start: PlacedPiece): ((p: Pose) => Pose) | null {
+  const rot = (r: number) => {
+    const c = Math.round(Math.cos(r * Math.PI / 180)), s = Math.round(Math.sin(r * Math.PI / 180));
+    return (x: number, y: number) => [x * c - y * s, x * s + y * c] as [number, number];
+  };
+  const make = (r: number, tx: number, ty: number) => {
+    const R = rot(r);
+    return (p: Pose): Pose => {
+      const [x, y] = R(p.x, p.y);
+      return { x: x + tx, y: y + ty, heading: normalizeHeading(p.heading + r) };
+    };
+  };
+  const boxOf = (r: number) => {
+    const R = rot(r);
+    const pts = [R(box.minX, box.minY), R(box.maxX, box.minY), R(box.minX, box.maxY), R(box.maxX, box.maxY)];
+    return { minX: Math.min(...pts.map(p => p[0])), maxX: Math.max(...pts.map(p => p[0])), minY: Math.min(...pts.map(p => p[1])), maxY: Math.max(...pts.map(p => p[1])) };
+  };
+  if (edge === 'any') {
+    const r = orientation === 'rotated' ? 90 : 0;
+    const b = boxOf(r);
+    return make(r, (W - (b.maxX - b.minX)) / 2 - b.minX, (D - (b.maxY - b.minY)) / 2 - b.minY);
+  }
+  const [ex, ey] = EDGE_NORMAL[edge];
+  const rotations = ex === 0 ? [0, 180] : [90, 270];
+  let best: { r: number; tx: number; ty: number; dist: number } | null = null;
+  for (const r of rotations) {
+    const b = boxOf(r);
+    if (b.maxX - b.minX > W || b.maxY - b.minY > D) continue;
+    // Mitte der Startgeraden und Seite der Control Unit (links in Fahrtrichtung)
+    const R = rot(r);
+    const t0 = (start.start.heading * Math.PI) / 180;
+    const [mx, my] = R(start.start.x + Math.cos(t0) * start.length / 2, start.start.y + Math.sin(t0) * start.length / 2);
+    const h = ((start.start.heading + r) * Math.PI) / 180;
+    const cuNx = -Math.sin(h) * CU_SIDE, cuNy = Math.cos(h) * CU_SIDE;
+    const cuTowardEdge = cuNx * ex + cuNy * ey > 0.5;
+    // Koordinate u entlang der Kantennormalen
+    const u = (x: number, y: number) => x * ex + y * ey;
+    const edgeU = edge === 'front' ? D : edge === 'right' ? W : 0;
+    const extent = ex === 0 ? D : W;
+    const bMaxU = Math.max(u(b.minX, b.minY), u(b.maxX, b.maxY), u(b.minX, b.maxY), u(b.maxX, b.minY));
+    const bMinU = Math.min(u(b.minX, b.minY), u(b.maxX, b.maxY), u(b.minX, b.maxY), u(b.maxX, b.minY));
+    const startU = u(mx, my);
+    let shift = edgeU - 20 - bMaxU;
+    if (cuTowardEdge) shift = Math.min(shift, edgeU - 10 - (startU + TRACK_WIDTH / 2 + ACCESSORY_GAP + CU_SIZE.across));
+    if (bMinU + shift < edgeU - extent) continue;
+    const cuCenterU = startU + shift + (cuTowardEdge ? 1 : -1) * (TRACK_WIDTH / 2 + ACCESSORY_GAP + CU_SIZE.across / 2);
+    const dist = Math.abs(edgeU - cuCenterU);
+    if (dist > CU_REACH) continue;
+    // quer zur Kante mittig
+    let tx = (W - (b.maxX - b.minX)) / 2 - b.minX, ty = (D - (b.maxY - b.minY)) / 2 - b.minY;
+    if (ex === 0) ty = shift * ey; else tx = shift * ex;
+    if (!best || dist < best.dist) best = { r, tx, ty, dist };
+  }
+  return best ? make(best.r, best.tx, best.ty) : null;
+}
+
 function finalize(ctx: Context, moves: Move[]): Layout | null {
   const { opts } = ctx;
   let pose: Pose = { x: 0, y: 0, heading: 0 };
@@ -858,14 +935,8 @@ function finalize(ctx: Context, moves: Move[]): Layout | null {
   const laneChanges = moves.filter(m => LANE_CHANGE_IDS.includes(m.partId)).length;
   if (laneChanges < opts.minLaneChanges) return null;
 
-  // In die Grundfläche legen (ggf. um 90° drehen), mittig ausrichten
-  const rotate = orientation === 'rotated';
-  const bw = rotate ? box.maxY - box.minY : box.maxX - box.minX;
-  const bh = rotate ? box.maxX - box.minX : box.maxY - box.minY;
-  const ox = (opts.areaWidth - bw) / 2, oy = (opts.areaDepth - bh) / 2;
-  const tf = (p: Pose): Pose => rotate
-    ? { x: (box.maxY - p.y) + ox, y: (p.x - box.minX) + oy, heading: normalizeHeading(p.heading + 90) }
-    : { x: p.x - box.minX + ox, y: p.y - box.minY + oy, heading: p.heading };
+  const tf = placeInArea(box, opts.areaWidth, opts.areaDepth, orientation, opts.cuEdge ?? 'any', placed[0]);
+  if (!tf) return null;
 
   const n = placed.length;
   const pieces = placed.map((p, i) => ({
@@ -1085,6 +1156,8 @@ export interface Evaluation {
   accessories: AccessoryBox[];
   accessoriesFit: boolean;
   direction: TravelDirection;
+  /** Control Unit von der gewählten Seite erreichbar */
+  cuReachable: boolean;
 }
 
 /**
@@ -1126,7 +1199,7 @@ function signedHeading(d: number) {
 }
 
 /** Teilefolge ab `start` legen und vollständig bewerten (ohne zu verwerfen). */
-export function evaluateMoves(moves: Move[], start: Pose, areaW: number, areaD: number, chargingStations: number): Evaluation {
+export function evaluateMoves(moves: Move[], start: Pose, areaW: number, areaD: number, chargingStations: number, cuEdge: CuEdge = 'any'): Evaluation {
   let pose = start;
   const placed: PlacedPiece[] = [];
   const seq: { samples: Sample[]; offset: number }[] = [];
@@ -1211,6 +1284,7 @@ export function evaluateMoves(moves: Move[], start: Pose, areaW: number, areaD: 
     accessories: accessories ?? [],
     accessoriesFit: accessories !== null,
     direction: travelDirection(placed),
+    cuReachable: accessories !== null && cuEdgeDistance(accessories, cuEdge, areaW, areaD) <= CU_REACH,
   };
 }
 
