@@ -1,0 +1,40 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/tabs/garage" [text]="'Garage' | translate"></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{'Track parts' | translate}}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title size="large">{{'Track parts' | translate}}</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <div class="section-label">{{'Series' | translate}}</div>
+  <ion-list [inset]="true">
+    <ion-item *ngFor="let row of rows | async" button [detail]="true" [routerLink]="row.series.id">
+      <ion-label>
+        <h2>{{row.series.name}}</h2>
+        <p *ngIf="row.pieces > 0">
+          {{ 'parts_summary' | translate: { pieces: row.pieces, types: row.types } }}
+        </p>
+        <p *ngIf="row.pieces === 0">{{'No parts entered yet' | translate}}</p>
+      </ion-label>
+      <button slot="end" class="check" type="button"
+              [attr.aria-pressed]="row.selected"
+              [attr.aria-label]="'I own this series' | translate"
+              (click)="toggle($event, row.series.id)">
+        <ion-icon [name]="row.selected ? 'checkmark-circle' : 'ellipse-outline'"
+                  [color]="row.selected ? 'success' : 'medium'"></ion-icon>
+      </button>
+    </ion-item>
+  </ion-list>
+
+  <p class="footnote">
+    {{'Tick the series you own. All Evolution track also fits Digital 132 – shared parts are counted only once.' | translate}}
+  </p>
+</ion-content>

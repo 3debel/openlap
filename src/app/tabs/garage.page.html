@@ -13,10 +13,9 @@
 
   <div class="section-label">{{'Track' | translate}}</div>
   <ion-list [inset]="true">
-    <ion-item [detail]="false">
+    <ion-item button [detail]="true" routerLink="parts">
       <ion-icon name="grid" slot="start" color="primary"></ion-icon>
       <ion-label>{{'Track parts' | translate}}</ion-label>
-      <ion-note slot="end">{{'Coming soon' | translate}}</ion-note>
     </ion-item>
   </ion-list>
 

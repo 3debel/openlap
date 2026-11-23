@@ -2,12 +2,16 @@ import { Component } from '@angular/core';
 
 import { addIcons } from 'ionicons';
 import {
+  add,
   carSport,
+  checkmarkCircle,
+  ellipseOutline,
   chevronForward,
   flag,
   grid,
   infinite,
   people,
+  remove,
   settings,
   speedometer,
   statsChart,
@@ -28,6 +32,6 @@ import {
 })
 export class TabsPage {
   constructor() {
-    addIcons({ carSport, chevronForward, flag, grid, infinite, people, settings, speedometer, statsChart });
+    addIcons({ add, carSport, checkmarkCircle, chevronForward, ellipseOutline, flag, grid, infinite, people, remove, settings, speedometer, statsChart });
   }
 }

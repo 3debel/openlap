@@ -5,6 +5,7 @@ import { RmsPage } from './rms';
 import { DriversPage } from './drivers';
 import { TuningPage } from './tuning';
 import { GaragePage, StatsPage, TabsPage, TrackPage } from './tabs';
+import { PartsPage, SeriesPage } from './track';
 
 const routes: Routes = [
   {
@@ -17,6 +18,8 @@ const routes: Routes = [
     component: TabsPage,
     children: [
       { path: 'garage', component: GaragePage },
+      { path: 'garage/parts', component: PartsPage },
+      { path: 'garage/parts/:series', component: SeriesPage },
       { path: 'garage/drivers', component: DriversPage },
       { path: 'garage/tuning', component: TuningPage },
       { path: 'track', component: TrackPage },

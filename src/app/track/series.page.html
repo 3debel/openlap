@@ -1,0 +1,57 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/tabs/garage/parts" text=""></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{series.name}}</ion-title>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-segment [value]="filter" (ionChange)="setFilter($any($event.detail.value))">
+      <ion-segment-button value="all">
+        <ion-label>{{'All parts' | translate}}</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="owned">
+        <ion-label>{{'Owned' | translate}} ({{totalPieces}})</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ng-container *ngFor="let section of sections; trackBy: trackBySection">
+    <div class="section-label">{{section.label | translate}}</div>
+    <ion-list [inset]="true">
+      <ion-item *ngFor="let part of section.parts; trackBy: trackById" [class.owned]="count(part) > 0">
+        <part-icon slot="start" [part]="part"></part-icon>
+        <ion-label class="ion-text-wrap" [attr.lang]="lang">
+          <h3>{{name(part)}}</h3>
+          <p class="meta">
+            <span *ngIf="part.articleNo">{{part.articleNo}}</span>{{' '}}<span *ngIf="dimensions(part)">{{dimensions(part)}}</span>
+          </p>
+          <p *ngIf="note(part)" class="note">{{note(part)}}</p>
+        </ion-label>
+        <div slot="end" class="stepper">
+          <button type="button" class="step" (click)="decrement(part)" [disabled]="count(part) === 0"
+                  [attr.aria-label]="'Fewer' | translate">
+            <ion-icon name="remove"></ion-icon>
+          </button>
+          <button type="button" class="count" (click)="editCount(part)"
+                  [attr.aria-label]="'Enter quantity' | translate">{{count(part)}}</button>
+          <button type="button" class="step" (click)="increment(part)"
+                  [attr.aria-label]="'More' | translate">
+            <ion-icon name="add"></ion-icon>
+          </button>
+        </div>
+      </ion-item>
+    </ion-list>
+  </ng-container>
+
+  <div class="empty" *ngIf="sections.length === 0">
+    <p>{{'No parts entered yet' | translate}}</p>
+    <ion-button fill="clear" (click)="setFilter('all')">{{'Show all parts' | translate}}</ion-button>
+  </div>
+
+  <p class="footnote">
+    {{'Previews are drawn from the dimensions. Dimensions are approximate and will be checked against real parts before the track editor.' | translate}}
+  </p>
+</ion-content>

@@ -1,0 +1,21 @@
+// Gemeinsame Stile der Bestandsseiten (iOS-Listenstil)
+
+.section-label {
+  margin: 24px 36px 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ion-color-medium);
+}
+
+ion-list[inset] {
+  margin-top: 0;
+}
+
+.footnote {
+  margin: 8px 36px 24px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ion-color-medium);
+  max-width: 65ch;
+}

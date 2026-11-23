@@ -5,6 +5,8 @@ import { RouterModule } from '@angular/router';
 import { IonicModule } from '@ionic/angular';
 import { TranslateModule } from '@ngx-translate/core';
 
+import { PartIconComponent, PartsPage, SeriesPage } from '../track';
+
 import { GaragePage } from './garage.page';
 import { StatsPage } from './stats.page';
 import { TabsPage } from './tabs.page';
@@ -13,6 +15,9 @@ import { TrackPage } from './track.page';
 @NgModule({
   declarations: [
     GaragePage,
+    PartIconComponent,
+    PartsPage,
+    SeriesPage,
     StatsPage,
     TabsPage,
     TrackPage
