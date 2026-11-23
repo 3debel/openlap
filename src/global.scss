@@ -139,3 +139,16 @@ ion-content::part(scroll) {
   padding-left: var(--ion-safe-area-left);
   padding-right: var(--ion-safe-area-right);
 }
+
+/* Mobile-Basis (siehe .claude/skills/mobile-native):
+ * kein Doppeltipp-Zoom auf Bedienelementen → Tipp reagiert sofort,
+ * Beschriftungen von Bedienelementen nicht per Langdruck markierbar. */
+button, a, [role="button"], ion-button, ion-item[button], ion-tab-button {
+  touch-action: manipulation;
+}
+
+button, [role="button"], ion-button, ion-tab-button {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
